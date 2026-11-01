@@ -697,6 +697,10 @@ class VictoryProgress:
     complete: bool = False  # protocol completeness; individual facts may remain unknown
     diplomatic_vp_needed: float | None = None
     contacts_known: bool = False
+    # Full-query native culture facts; keys are observed, met player IDs.
+    # Nonpositive forecasts are retained verbatim, not interpreted as victory.
+    culture_turns_until_victory: dict[int, float | None] = field(default_factory=dict)
+    culture_dominance: dict[int, dict[int, bool | None]] = field(default_factory=dict)
 
 
 @dataclass

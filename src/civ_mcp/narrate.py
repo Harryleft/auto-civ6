@@ -2071,6 +2071,29 @@ def narrate_victory_progress(vp: lq.VictoryProgress, *, compact: bool = False) -
             domestic = vp.their_staycationers.get(name)
             lines.append(_compact_row(name, _victory_number(tourists), _victory_number(domestic)) if compact else
                          f"  Our tourists from {name}: {_victory_number(tourists)} | their domestic tourists: {_victory_number(domestic)}")
+        if vp.culture_turns_until_victory or vp.culture_dominance:
+            lines.append("Native culture observations: met alive civilizations only; same known teams omitted from dominance. Unknown team/API remains unknown; forecasts are not victory confirmation.")
+            if compact:
+                lines.append("JSON rows: [player,native turns until victory,forecast status]. Nonpositive raw values mean no positive forecast reported.")
+            for player in vp.players:
+                if player.player_id not in vp.culture_turns_until_victory:
+                    continue
+                turns = vp.culture_turns_until_victory[player.player_id]
+                forecast_status = "unknown" if turns is None else "native estimate" if turns > 0 else "no positive forecast reported"
+                lines.append(_compact_row(player.name, turns, forecast_status) if compact else
+                             f"  {player.name}: native turns until victory {_victory_number(turns)} ({forecast_status})")
+            if compact and vp.culture_dominance:
+                lines.append("JSON rows: [source,target,native cultural dominance]; null=unknown.")
+            names = {player.player_id: player.name for player in vp.players}
+            for source, targets in vp.culture_dominance.items():
+                if source not in names:
+                    continue
+                for target, dominant in targets.items():
+                    if target not in names:
+                        continue
+                    status = "unknown" if dominant is None else str(dominant).lower()
+                    lines.append(_compact_row(names[source], names[target], dominant) if compact else
+                                 f"  {names[source]} -> {names[target]}: native cultural dominance {status}")
 
     if (not vp.enabled_known and not enabled) or "VICTORY_RELIGIOUS" in enabled:
         lines.append(f"\nRELIGION (founded {_victory_number(vp.religions_founded)}/{vp.religions_max})")

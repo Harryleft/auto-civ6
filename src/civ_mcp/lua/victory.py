@@ -23,6 +23,15 @@ def _number(value: str) -> float | None:
         return None
 
 
+def _forecast(value: str) -> float | None:
+    """Keep native nonpositive sentinels without assigning them a meaning."""
+    try:
+        result = float(value)
+        return result if math.isfinite(result) else None
+    except (ValueError, TypeError):
+        return None
+
+
 # pcall preserves false; unknown observations must not become production eligibility.
 _LUA_READ = r"""
 local function observed(fn)
@@ -221,6 +230,7 @@ def build_victory_progress_query() -> str:
 local me = Game.GetLocalPlayer()
 local pDiplo = Players[me]:GetDiplomacy()
 local pCul = Players[me]:GetCulture()
+local culturePlayers = {{}}
 
 local dPop, dMil, dFood, dGold, dLand, dProd = {{}}, {{}}, {{}}, {{}}, {{}}, {{}}
 for i = 0, 62 do
@@ -228,6 +238,7 @@ for i = 0, 62 do
     if p and p:IsMajor() and p:IsAlive() then
         local met = i == me or observed(function() return pDiplo:HasMet(i) end) == true
         if met then
+            table.insert(culturePlayers, i)
             local cfg = PlayerConfigurations[i]
             local name = wire(Locale.Lookup(cfg:GetCivilizationShortDescription()))
             local st = p:GetStats()
@@ -254,8 +265,9 @@ for i = 0, 62 do
             if i ~= me then
                 local ourTourists = wire(number(observed(function() return pCul:GetTouristsFrom(i) end)))
                 local theirStay = wire(number(observed(function() return p:GetCulture():GetStaycationers() end)))
-                local dominant = pCul:IsDominantOver(i)
-                print("CULTURE|" .. name .. "|" .. ourTourists .. "|" .. theirStay .. "|" .. tostring(dominant))
+                local dominant = observed(function() return pCul:IsDominantOver(i) end)
+                if type(dominant) ~= "boolean" then dominant = nil end
+                print("CULTURE|" .. name .. "|" .. ourTourists .. "|" .. theirStay .. "|" .. wire(dominant))
             end
             local cap = p:GetCities():GetCapitalCity()
             local holdsOwn = cap and cap:IsOriginalCapital() or false
@@ -293,6 +305,29 @@ for i = 0, 62 do
         table.insert(dGold, {{v=netGold, mine=(i==me)}})
         table.insert(dLand, {{v=ownedPlots, mine=(i==me)}})
         table.insert(dProd, {{v=totalProd, mine=(i==me)}})
+    end
+end
+-- Same getters as native WorldRankings. Never infer dominance from tourism
+-- ratios, or expose an unmet player's identity. Missing team/API facts stay unknown.
+for _, sourceID in ipairs(culturePlayers) do
+    local source = Players[sourceID]
+    local culture = observed(function() return source:GetCulture() end)
+    local forecast = observed(function() return culture:GetTurnsUntilVictory() end)
+    if type(forecast) ~= "number" or forecast ~= forecast or math.abs(forecast) == math.huge then forecast = nil end
+    print("CULTURE_NATIVE|" .. sourceID .. "|" .. wire(forecast))
+    local sourceTeam = observed(function() return source:GetTeam() end)
+    for _, targetID in ipairs(culturePlayers) do
+        if sourceID ~= targetID then
+            local targetTeam = observed(function() return Players[targetID]:GetTeam() end)
+            local teamsKnown = number(sourceTeam) ~= nil and number(targetTeam) ~= nil
+                and sourceTeam % 1 == 0 and targetTeam % 1 == 0
+            if not teamsKnown or sourceTeam ~= targetTeam then
+                local dominant = nil
+                if teamsKnown then dominant = observed(function() return culture:IsDominantOver(targetID) end) end
+                if type(dominant) ~= "boolean" then dominant = nil end
+                print("CULTURE_DOMINANCE|" .. sourceID .. "|" .. targetID .. "|" .. wire(dominant))
+            end
+        end
     end
 end
 local function emitDemo(label, arr)
@@ -334,6 +369,8 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
     players: list[VictoryPlayerProgress] = []
     our_tourists: dict[str, float | None] = {}
     their_stay: dict[str, float | None] = {}
+    culture_forecasts: dict[int, float | None] = {}
+    culture_dominance: dict[int, dict[int, bool | None]] = {}
     capitals: dict[str, bool] = {}
     rel_majority: dict[str, str] = {}
     rel_founded_names: dict[str, str] = {}
@@ -389,6 +426,14 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
             if len(p) >= 5:
                 our_tourists[p[1]] = _number(p[2])
                 their_stay[p[1]] = _number(p[3])
+        elif line.startswith("CULTURE_NATIVE|"):
+            p = line.split("|")
+            if len(p) == 3:
+                culture_forecasts[int(p[1])] = _forecast(p[2])
+        elif line.startswith("CULTURE_DOMINANCE|"):
+            p = line.split("|")
+            if len(p) == 4:
+                culture_dominance.setdefault(int(p[1]), {})[int(p[2])] = {"true": True, "false": False}.get(p[3])
         elif line.startswith("CAPITAL|"):
             p = line.split("|")
             if len(p) >= 3:
@@ -481,6 +526,8 @@ def parse_victory_progress_response(lines: list[str]) -> VictoryProgress:
         turn=turn, local_player_id=local_player_id, complete=complete,
         enabled_known=enabled_known, diplomatic_vp_needed=diplomatic_vp_needed,
         contacts_known=contacts_known,
+        culture_turns_until_victory=culture_forecasts,
+        culture_dominance=culture_dominance,
         our_tourists_from=our_tourists,
         their_staycationers=their_stay,
         capitals_held=capitals,
@@ -499,6 +546,7 @@ def _valid_victory_row(row: str) -> bool:
     fields = row.split("|")
     tag = fields[0]
     sizes = {"PLAYER": (14, 18), "SPACE": (4, 4), "CULTURE": (5, 5),
+             "CULTURE_NATIVE": (3, 3), "CULTURE_DOMINANCE": (4, 4),
              "CAPITAL": (3, 3), "RELMAJ": (3, 3), "RELFOUNDED": (3, 3),
              "RELSLOTS": (3, 3), "SPACEPROJ": (9, 12), "DEMO": (6, 7),
              "VICTORY_CONTEXT": (3, 3), "VICTORY_ENABLED_KNOWN": (2, 2),
@@ -513,6 +561,10 @@ def _valid_victory_row(row: str) -> bool:
         numbers = (2,)
     elif tag == "CULTURE":
         numbers, unknown, booleans = (2, 3), (2, 3), (4,)
+    elif tag == "CULTURE_NATIVE":
+        numbers, unknown = (1, 2), (2,)
+    elif tag == "CULTURE_DOMINANCE":
+        numbers, booleans = (1, 2), (3,)
     elif tag == "CAPITAL":
         booleans = (2,)
     elif tag == "RELSLOTS":
@@ -531,7 +583,7 @@ def _valid_victory_row(row: str) -> bool:
         numbers = unknown = (1,)
     elif tag == "VFACT":
         numbers, unknown = (1, *range(3, len(fields))), tuple(range(3, len(fields)))
-    boolean_values = {"true", "false", "unknown"} if tag in {"PLAYER", "SPACEPROJ"} else {"true", "false"}
+    boolean_values = {"true", "false", "unknown"} if tag in {"PLAYER", "SPACEPROJ", "CULTURE", "CULTURE_DOMINANCE"} else {"true", "false"}
     if any(fields[i] not in boolean_values for i in booleans):
         return False
     # Context/completion flags must themselves be known; unknown values remain
@@ -546,8 +598,10 @@ def _valid_victory_row(row: str) -> bool:
                 return False
         if tag == "VICTORY_CONTEXT":
             return int(fields[1]) >= 0 and 0 <= int(fields[2]) <= 63
-        if tag in {"PLAYER", "VFACT"}:
+        if tag in {"PLAYER", "VFACT", "CULTURE_NATIVE"}:
             return 0 <= int(fields[1]) <= 62
+        if tag == "CULTURE_DOMINANCE":
+            return all(0 <= int(fields[index]) <= 62 for index in (1, 2)) and fields[1] != fields[2]
     except ValueError:
         return False
     return True
