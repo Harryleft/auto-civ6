@@ -380,7 +380,13 @@ if tgtUnits then
             -- path eligibility below; do not block a ground guard here.
             local separateAirLayer = otherInfo and otherInfo.Domain == "DOMAIN_AIR" and unitInfo
                 and (unitInfo.Domain == "DOMAIN_LAND" or unitInfo.Domain == "DOMAIN_SEA")
-            if isCivilian == otherCivilian and not religiousMover and not separateAirLayer then
+            -- Land support and land combat units use different formation
+            -- layers; allow only this known pair through to native checks.
+            local separateLandSupportLayer = unitInfo and otherInfo
+                and unitInfo.Domain == "DOMAIN_LAND" and otherInfo.Domain == "DOMAIN_LAND"
+                and ((unitInfo.FormationClass == "FORMATION_CLASS_LAND_COMBAT" and otherInfo.FormationClass == "FORMATION_CLASS_SUPPORT")
+                    or (unitInfo.FormationClass == "FORMATION_CLASS_SUPPORT" and otherInfo.FormationClass == "FORMATION_CLASS_LAND_COMBAT"))
+            if isCivilian == otherCivilian and not religiousMover and not separateAirLayer and not separateLandSupportLayer then
                 local otherName = otherInfo and otherInfo.UnitType or "unit"
                 {_bail_lua(f'"ERR:STACKING_CONFLICT|Friendly " .. otherName .. " already on ({target_x},{target_y}). Cannot stack same formation class."')}
             end

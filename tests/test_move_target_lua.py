@@ -45,6 +45,97 @@ def run(awaitable):
     return asyncio.run(awaitable)
 
 
+def friendly_land_stack(conn, mover_class, occupant_class):
+    native=conn.lua.globals()
+    native.mover_class=mover_class
+    native.occupant_class=occupant_class
+    conn.lua.execute('''
+can_target=true
+GameInfo.Units[1].Domain='DOMAIN_LAND'
+GameInfo.Units[1].FormationClass=mover_class
+GameInfo.Units[2]={UnitType='UNIT_OCCUPANT',Domain='DOMAIN_LAND',FormationClass=occupant_class}
+local occupant={GetOwner=function()return 0 end,GetType=function()return 2 end}
+Map.GetUnitsAt=function()return {Units=function()
+ local used=false;return function()if not used then used=true;return occupant end end
+end}end
+''')
+
+
+@pytest.mark.parametrize('mover,occupant', [
+    ('FORMATION_CLASS_LAND_COMBAT', 'FORMATION_CLASS_SUPPORT'),
+    ('FORMATION_CLASS_SUPPORT', 'FORMATION_CLASS_LAND_COMBAT'),
+])
+def test_land_combat_and_support_share_destination_only_after_native_checks(mover, occupant):
+    conn=TargetMovementConn();friendly_land_stack(conn, mover, occupant)
+    state=GameState(conn)
+
+    result=run(state.move_unit(6, 20, 17))
+
+    assert 'now_at:20,17' in result, result
+    assert conn.lua.eval('checked_params==submitted_params')
+    assert conn.lua.globals().target_checks==conn.lua.globals().submissions==1
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('mover,occupant', [
+    ('FORMATION_CLASS_LAND_COMBAT', 'FORMATION_CLASS_SUPPORT'),
+    ('FORMATION_CLASS_SUPPORT', 'FORMATION_CLASS_LAND_COMBAT'),
+])
+@pytest.mark.parametrize('setup,error', [
+    ('can_target=false', 'CANNOT_MOVE_TARGET'),
+    ('can_target=nil', 'CANNOT_MOVE_TARGET'),
+    ('UnitManager.GetMoveToPathEx=function()return nil end', 'PATH_UNKNOWN'),
+])
+def test_land_combat_support_pair_does_not_bypass_native_target_or_path(mover, occupant, setup, error):
+    conn=TargetMovementConn();friendly_land_stack(conn, mover, occupant)
+    conn.lua.execute(setup);state=GameState(conn)
+
+    result=run(state.move_unit(6, 20, 17))
+
+    assert result.startswith(f'Error: {error}|'), result
+    assert conn.lua.globals().target_checks==1
+    assert conn.lua.globals().submissions==0 and conn.lua.globals().listenerCount()==1
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('mover,occupant,setup', [
+    ('FORMATION_CLASS_LAND_COMBAT', 'FORMATION_CLASS_LAND_COMBAT', ''),
+    ('FORMATION_CLASS_SUPPORT', 'FORMATION_CLASS_SUPPORT', ''),
+    ('FORMATION_CLASS_LAND_COMBAT', 'FORMATION_CLASS_SUPPORT', 'GameInfo.Units[1].Domain=nil'),
+    ('FORMATION_CLASS_LAND_COMBAT', 'FORMATION_CLASS_SUPPORT', 'GameInfo.Units[2].Domain=nil'),
+    ('FORMATION_CLASS_LAND_COMBAT', 'FORMATION_CLASS_SUPPORT', 'GameInfo.Units[1].Domain="DOMAIN_SEA"'),
+    ('FORMATION_CLASS_SUPPORT', 'FORMATION_CLASS_LAND_COMBAT', 'GameInfo.Units[2].Domain="DOMAIN_SEA"'),
+    (None, 'FORMATION_CLASS_SUPPORT', ''),
+    ('FORMATION_CLASS_LAND_COMBAT', None, ''),
+])
+def test_same_or_unverified_land_stack_keeps_original_zero_submit_conflict(mover, occupant, setup):
+    conn=TargetMovementConn();friendly_land_stack(conn, mover, occupant)
+    conn.lua.execute(setup);state=GameState(conn)
+
+    result=run(state.move_unit(6, 20, 17))
+
+    assert result.startswith('Error: STACKING_CONFLICT|'), result
+    assert conn.lua.globals().target_checks==conn.lua.globals().submissions==0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('mover,occupant', [
+    ('FORMATION_CLASS_LAND_COMBAT', 'FORMATION_CLASS_SUPPORT'),
+    ('FORMATION_CLASS_SUPPORT', 'FORMATION_CLASS_LAND_COMBAT'),
+])
+def test_unconfirmed_land_combat_support_move_retains_pending_without_resubmission(mover, occupant, short_confirmation):
+    conn=TargetMovementConn();friendly_land_stack(conn, mover, occupant)
+    conn.lua.execute('perform_move=false');state=GameState(conn)
+
+    assert 'OUTCOME_UNKNOWN' in run(state.move_unit(6, 20, 17))
+    original=state.pending_action_summary
+    assert original is not None
+    assert 'OUTCOME_UNKNOWN' in run(state.move_unit(6, 20, 17))
+    assert 'OUTCOME_UNKNOWN' in run(state.move_unit(6, 21, 17))
+    assert state.pending_action_summary==original
+    assert conn.lua.globals().target_checks==conn.lua.globals().submissions==1
+
+
 @pytest.mark.parametrize('domain,allowed', [('DOMAIN_AIR', True), ('DOMAIN_LAND', False)])
 def test_ground_unit_can_guard_aircraft_base_but_cannot_stack_ground_units(domain, allowed, short_confirmation):
     conn = TargetMovementConn()
