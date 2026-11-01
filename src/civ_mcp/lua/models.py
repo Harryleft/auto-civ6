@@ -111,6 +111,7 @@ class UnitInfo:
     upgrade_cost: int = 0
     valid_improvements: list[str] = field(default_factory=list)
     religion: str = ""
+    ready_to_move: bool | None = None
 
 
 @dataclass

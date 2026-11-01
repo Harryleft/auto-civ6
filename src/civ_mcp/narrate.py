@@ -212,6 +212,8 @@ def narrate_units(
             status = f" [HP: {u.health}/{u.max_health}]"
         if u.moves_remaining < 0.01:
             status += " (no moves)"
+        readiness = "unknown" if u.ready_to_move is None else str(u.ready_to_move).lower()
+        status += f" [ready:{readiness}]"
         # Annotate traders on active routes
         route_flag = ""
         if u.unit_id in trader_routes:

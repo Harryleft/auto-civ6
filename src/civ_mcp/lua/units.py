@@ -198,7 +198,13 @@ for i, u in Players[id]:GetUnits():Members() do
             end
             if #meList > 0 then validImps = table.concat(meList, ";") end
         end
-        print(uid .. "|" .. (uid % 65536) .. "|" .. nm .. "|" .. ut .. "|" .. x .. "," .. y .. "|" .. u:GetMovesRemaining() .. "/" .. u:GetMaxMoves() .. "|" .. (u:GetMaxDamage() - u:GetDamage()) .. "/" .. u:GetMaxDamage() .. "|" .. cs .. "|" .. rs .. "|" .. charges .. "|" .. targets .. "|" .. promo .. "|" .. canUp .. "|" .. upName .. "|" .. upCost .. "|" .. validImps .. "|" .. relName)
+        -- Movement points do not establish readiness: sleeping units and
+        -- queued orders can retain MP. Report the same native getter used by
+        -- turn diagnostics, without resolving orders or inferring eligibility.
+        local ready = "?"
+        local okReady, nativeReady = pcall(function() return u:IsReadyToMove() end)
+        if okReady and type(nativeReady) == "boolean" then ready = tostring(nativeReady) end
+        print(uid .. "|" .. (uid % 65536) .. "|" .. nm .. "|" .. ut .. "|" .. x .. "," .. y .. "|" .. u:GetMovesRemaining() .. "/" .. u:GetMaxMoves() .. "|" .. (u:GetMaxDamage() - u:GetDamage()) .. "/" .. u:GetMaxDamage() .. "|" .. cs .. "|" .. rs .. "|" .. charges .. "|" .. targets .. "|" .. promo .. "|" .. canUp .. "|" .. upName .. "|" .. upCost .. "|" .. validImps .. "|" .. relName .. "|" .. ready)
     end
 end
 print("{SENTINEL}")
@@ -1520,6 +1526,7 @@ def parse_units_response(lines: list[str]) -> list[UnitInfo]:
                 upgrade_cost=upgrade_cost,
                 valid_improvements=valid_imps,
                 religion=religion,
+                ready_to_move={"true": True, "false": False}.get(parts[17]) if len(parts) > 17 else None,
             )
         )
     return units
@@ -1535,8 +1542,10 @@ def observe_units_response(lines: list[str]) -> Observation[list[UnitInfo]]:
     for row in lines:
         fields = row.split("|")
         try:
-            if not 7 <= len(fields) <= 17:
+            if not 7 <= len(fields) <= 18:
                 raise ValueError("truncated or unexpected unit fields")
+            if len(fields) > 17 and fields[17] not in {"true", "false", "?"}:
+                raise ValueError("invalid unit readiness")
             if any(fields[i] not in {"0", "1"} for i in (11, 12) if len(fields) > i):
                 raise ValueError("invalid unit boolean")
             if len(fields) > 14 and not fields[14].isdecimal():
