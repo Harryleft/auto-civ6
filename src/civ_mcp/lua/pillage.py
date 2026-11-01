@@ -30,8 +30,22 @@ local function pillageState(unit)
         local cityBuildings=city:GetBuildings()
         local ids=cityBuildings:GetBuildingsAtLocation(index)
         assert(type(ids)=="table")
-        for _,id in ipairs(ids) do
-            assert(type(id)=="number")
+        -- ipairs silently truncates sparse lists, and duplicate IDs collapse
+        -- in states. Validate the complete native list before reading damage.
+        local function integer(value,minimum)
+            return type(value)=="number" and value>=minimum and value<math.huge
+                and value==math.floor(value)
+        end
+        local count,seen=0,{}
+        for key,id in pairs(ids) do
+            assert(integer(key,1),"BUILDING_LIST_KEY_INVALID")
+            assert(integer(id,0) and not seen[id],"BUILDING_ID_INVALID_OR_DUPLICATE")
+            seen[id]=true
+            count=count+1
+        end
+        for i=1,count do assert(ids[i]~=nil,"BUILDING_LIST_SPARSE") end
+        for i=1,count do
+            local id=ids[i]
             addState("building:"..id,cityBuildings:IsPillaged(id))
         end
     end

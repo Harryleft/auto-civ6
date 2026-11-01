@@ -278,3 +278,77 @@ def test_unconfirmed_turn_or_checkpoint_refuses_pillage_before_any_operation(pen
     setattr(state, pending, True)
     assert 'OUTCOME_UNKNOWN' in asyncio.run(state.pillage_unit(196608))
     assert conn.lua.eval('#submissions') == 0
+
+
+def _replace_building_ids(conn, ids):
+    """Keep native damage facts independent from the returned ID list shape."""
+    conn.lua.execute(f'''
+city.GetBuildings=function() return {{
+ GetBuildingsAtLocation=function() return {ids} end,
+ IsPillaged=function(_,id) return buildings[id]==true end
+}} end
+''')
+
+
+@pytest.mark.parametrize('ids', [
+    '{[1]=9,[3]=10}', '{9,9,10}', '{[0]=10,[1]=9}', '{9,other=10}',
+    '{9,-1}', '{9,10.5}', '{9,math.huge}', '{9,0/0}', '{9,"10"}',
+])
+def test_invalid_building_id_list_refuses_pillage_before_submission(ids):
+    conn = PillageConn()
+    conn.lua.execute('improvement=-1;district_type=2;buildings={[9]=false,[10]=false};pillage_layer=9')
+    _replace_building_ids(conn, ids)
+    state = GameState(conn)
+    assert 'PILLAGE_REFUSED' in asyncio.run(state.pillage_unit(196608))
+    assert conn.lua.eval('#submissions') == 0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('ids', ['{[1]=9,[2]=10,[4]=11}', '{9,10,10}', '{9,10,other=11}'])
+def test_invalid_confirmation_building_list_keeps_original_pending_without_resubmit(ids, monkeypatch):
+    import civ_mcp.game_state as module
+    monkeypatch.setattr(module, 'ACTION_CONFIRM_TIMEOUT', .005)
+    conn = PillageConn()
+    conn.lua.execute('deferred=true;improvement=-1;district_type=2;buildings={[9]=false,[10]=false}')
+    state = GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.pillage_unit(196608))
+    conn.lua.execute('buildings[10]=true;buildings[11]=true')
+    _replace_building_ids(conn, ids)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.pillage_unit(196608))
+    assert state.pending_action_summary
+    assert conn.lua.eval('#submissions') == 1
+    # Restoring a complete list exposes the second changed layer; neither
+    # sparse truncation nor a retry may turn that into a one-layer witness.
+    _replace_building_ids(conn, '{9,10,11}')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.confirm_pending_action())
+    assert state.pending_action_summary
+    assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('ids', ['{[1]=9,[3]=10}', '{9,10,10}'])
+def test_building_list_corruption_between_preflight_and_submit_has_zero_submissions(ids):
+    class ChangedConn(PillageConn):
+        async def execute_write(self, code):
+            if '-- ACTION_SUBMIT_SCOPE|' in code:
+                _replace_building_ids(self, ids)
+            return await super().execute_write(code)
+
+    conn = ChangedConn()
+    conn.lua.execute('improvement=-1;district_type=2;buildings={[9]=false,[10]=false};pillage_layer=9')
+    state = GameState(conn)
+    assert 'PILLAGE_REFUSED' in asyncio.run(state.pillage_unit(196608))
+    assert conn.lua.eval('#submissions') == 0
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('setup,expected', [
+    ('buildings={[0]=false,[9]=false};pillage_layer=0', 'building:0'),
+    ("buildings={};pillage_layer='district'", 'district:2'),
+])
+def test_dense_building_lists_allow_zero_id_and_empty_district(setup, expected):
+    conn = PillageConn()
+    conn.lua.execute('improvement=-1;district_type=2;' + setup)
+    state = GameState(conn)
+    assert f'damaged:{expected}' in asyncio.run(state.pillage_unit(196608))
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
