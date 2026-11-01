@@ -433,7 +433,8 @@ def domain_parser(group: str):
         decision.add_argument("--include", nargs="+", choices=("research", "diplomacy", "trade"), default=argparse.SUPPRESS)
         decision.add_argument("--city", dest="city_ids", nargs="+", type=int, default=argparse.SUPPRESS,
                               help="Native owned city IDs whose production choices to include")
-        decision.add_argument("--view", choices=("brief", "structured"), default=argparse.SUPPRESS)
+        decision.add_argument("--view", choices=("brief", "compact", "structured"), default=argparse.SUPPRESS,
+                              help="brief: existing reports; compact: current facts with shared table headings; structured: parsed data")
         command("launch", "launch_game", "Explicitly launch Civ6; does not choose or load a save.")
         command("menu", "return_to_main_menu", "Return to the native main menu; keeps the process, never loads or saves.")
         command("stop", "kill_game", "Explicitly stop Civ6; pending lifecycle gates still apply.")

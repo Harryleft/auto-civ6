@@ -68,6 +68,21 @@ def test_brief_uses_existing_reports_while_structured_preserves_raw_fields():
     assert "Turn 12 | Rome" in brief["sections"]["overview"]["data"]
 
 
+def test_compact_changes_only_presentation_and_keeps_unknown_sections():
+    rows = response({"threats": ["DECISION_ERROR|visibility unavailable"]})
+    brief, _, _ = read(rows)
+    compact, game, conn = read(rows, view="compact")
+    assert len(conn.calls) == 1 and game._last_snapshot is None
+    for key in ("schema_version", "status", "pending", "identity", "checks", "error", "scope"):
+        assert compact[key] == brief[key]
+    assert compact["status"] == "unknown"
+    for section in ("overview", "threats", "notifications", "blockers", "outcome"):
+        assert compact["sections"][section] == brief["sections"][section]
+    assert "data" not in compact["sections"]["threats"]
+    assert "65536" in compact["sections"]["units"]["data"]
+    assert "Warrior" in compact["sections"]["units"]["data"]
+
+
 @pytest.mark.parametrize("section,rows", [
     ("units", ["malformed entity"]), ("victory", ["VICTORY_CONTEXT|12|0"]),
     ("notifications", []), ("outcome", []), ("blockers", []),
@@ -91,12 +106,13 @@ def test_changed_or_unknown_scope_cannot_certify_old_facts(scope):
     assert not value["checks"]["overview_scope"]
 
 
+@pytest.mark.parametrize("view", ["brief", "compact", "structured"])
 @pytest.mark.parametrize("flag", ["_pending_save", "_pending_load", "_pending_end_turn"])
-def test_pending_refuses_before_any_transport_and_preserves_owner(flag):
+def test_pending_refuses_before_any_transport_and_preserves_owner(flag, view):
     conn = Conn()
     game = GameState(conn)
     setattr(game, flag, True)
-    value = json.loads(asyncio.run(server.get_decision_context(make_ctx(game=game))))
+    value = json.loads(asyncio.run(server.get_decision_context(make_ctx(game=game), view=view)))
     assert value["status"] == "blocked" and any(value["pending"].values())
     assert conn.calls == [] and getattr(game, flag)
 
@@ -135,12 +151,13 @@ UI={RequestPlayerOperation=function()error("Mutation forbidden")end}''')
     assert rows[-1] == f"TURN_WORLD|{WORLD}"
 
 
-def test_named_contract_validates_optional_reads_against_real_tool_schema():
+@pytest.mark.parametrize("view", ["brief", "compact", "structured"])
+def test_named_contract_validates_optional_reads_against_real_tool_schema(view):
     from jsonschema import Draft202012Validator
-    intent = parse_command("game decision --include research diplomacy --city 1 2 --view structured")
+    intent = parse_command(f"game decision --include research diplomacy --city 1 2 --view {view}")
     assert intent.tool == "get_decision_context"
     Draft202012Validator(server.mcp._tool_manager.get_tool(intent.tool).parameters).validate(intent.arguments)
-    assert intent.arguments == dict(include=["research", "diplomacy"], city_ids=[1, 2], view="structured")
+    assert intent.arguments == dict(include=["research", "diplomacy"], city_ids=[1, 2], view=view)
 
 
 def test_composed_native_threat_reader_keeps_barbarians_distinct_and_hides_fog():
@@ -180,15 +197,16 @@ UI={RequestPlayerOperation=function()error("No mutations")end}
     assert {t.owner_id: t.is_city_state for t in threats} == {1: False, 10: True, 63: False}
 
 
-def test_real_stdio_pending_action_is_not_confirmed_by_decision_reader(tmp_path):
+@pytest.mark.parametrize("view", ["brief", "compact", "structured"])
+def test_real_stdio_pending_action_is_not_confirmed_by_decision_reader(tmp_path, view):
     from test_debug_cli import MOVE, run_fake
-    _, _, events, _, _ = run_fake(tmp_path, MOVE + "state decision\npending\nquit --abandon\n")
+    _, _, events, _, _ = run_fake(tmp_path, MOVE + f"game decision --view {view}\npending\nquit --abandon\n")
     event = next(r for r in events if r["event"] == "tool_result" and r["tool"] == "get_decision_context")
     value = json.loads(event["result"]["content"][0]["text"])
     assert value["status"] == "blocked" and value["pending"]["action"]
 
 
-@pytest.mark.parametrize('view', ['brief', 'structured'])
+@pytest.mark.parametrize('view', ['brief', 'compact', 'structured'])
 def test_actual_decision_envelope_is_timing_anchor_without_extra_queries(view):
     from civ_mcp.devtools.turn_timing import TurnTiming
     from test_turn_timing import record

@@ -249,14 +249,15 @@ async def get_decision_context(
     ctx: Context,
     include: list[Literal["research", "diplomacy", "trade"]] | None = None,
     city_ids: list[Annotated[int, Field(ge=0, strict=True)]] | None = None,
-    view: Literal["brief", "structured"] = "brief",
+    view: Literal["brief", "compact", "structured"] = "brief",
 ) -> str:
     """Read decision facts in one bounded InGame request; never select actions.
 
     Core: overview, owned units/cities, visible threats, public victory progress,
     notifications, native notification blockers and outcome. Optional research,
     diplomacy, trade and production for explicitly queried city IDs. Brief keeps
-    existing domain reports; structured exposes parsed data. Both check scope
+    existing domain reports; compact shares table headings for units, cities and
+    victory without dropping their facts; structured exposes parsed data. All check scope
     and preserve section failures. Not atomic, no cache, no pending confirmation.
     Missing optional sections are unqueried, not empty. End-turn still checks its
     own readiness, diplomacy and congress; no blockers here does not permit it.

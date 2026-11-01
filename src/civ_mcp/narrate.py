@@ -5,7 +5,20 @@ All functions are pure: data in, string out. No side effects, no I/O.
 
 from __future__ import annotations
 
+import json
+
 from civ_mcp import lua as lq
+
+
+def _compact_row(*values: object) -> str:
+    """JSON arrays keep names, delimiters and newlines distinct from table structure."""
+    return json.dumps(values, ensure_ascii=False, separators=(",", ":"))
+
+
+def _compact_rounded(value: float) -> int | str:
+    text = f"{value:.0f}"
+    # Keep the legacy display for non-finite observations and rounded negative zero.
+    return text if text in {"nan", "inf", "-inf", "-0"} else int(text)
 
 
 def narrate_score_comparison(saved: dict | None, current: dict) -> str:
@@ -191,6 +204,7 @@ def narrate_units(
     units: list[lq.UnitInfo],
     threats: list[lq.ThreatInfo] | None = None,
     trade_status: lq.TradeRouteStatus | None = None,
+    *, compact: bool = False,
 ) -> str:
     if not units:
         return "No units."
@@ -201,6 +215,8 @@ def narrate_units(
             if t.on_route:
                 trader_routes[t.unit_id] = t
     lines = [f"{len(units)} units:"]
+    if compact:
+        lines.append("JSON rows: [id,idx,name,type,[x,y],CS/RS,moves,ready,details]; HP omitted=full; upgrade=CAN UPGRADE.")
     for u in units:
         strength = ""
         if u.combat_strength > 0:
@@ -213,7 +229,8 @@ def narrate_units(
         if u.moves_remaining < 0.01:
             status += " (no moves)"
         readiness = "unknown" if u.ready_to_move is None else str(u.ready_to_move).lower()
-        status += f" [ready:{readiness}]"
+        if not compact:
+            status += f" [ready:{readiness}]"
         # Annotate traders on active routes
         route_flag = ""
         if u.unit_id in trader_routes:
@@ -232,16 +249,26 @@ def narrate_units(
         if u.can_upgrade:
             upgrade_flag = (f" **CAN UPGRADE to {u.upgrade_target} ({u.upgrade_cost}g)**" if u.upgrade_target
                             else f" **CAN UPGRADE (target unknown; {u.upgrade_cost}g)**")
+            if compact:
+                upgrade_flag = (f" upgrade:{u.upgrade_target} ({u.upgrade_cost}g)" if u.upgrade_target
+                                else f" upgrade:(target unknown; {u.upgrade_cost}g)")
         moves_disp = (
             f"{int(u.moves_remaining)}/{int(u.max_moves)}"
             if u.moves_remaining == int(u.moves_remaining)
             else f"{u.moves_remaining:.1f}/{int(u.max_moves)}"
         )
-        lines.append(
-            f"  {u.name} ({u.unit_type}) at ({u.x},{u.y}) —{strength} "
-            f"moves {moves_disp}{charges}{religion_flag}{status}{route_flag}{promo_flag}{upgrade_flag} "
-            f"[id:{u.unit_id}, idx:{u.unit_index}]"
-        )
+        if compact:
+            lines.append(_compact_row(
+                u.unit_id, u.unit_index, u.name, u.unit_type, [u.x, u.y],
+                f"{u.combat_strength}/{u.ranged_strength}", moves_disp, readiness,
+                f"{charges}{religion_flag}{status}{route_flag}{promo_flag}{upgrade_flag}".strip(),
+            ))
+        else:
+            lines.append(
+                f"  {u.name} ({u.unit_type}) at ({u.x},{u.y}) —{strength} "
+                f"moves {moves_disp}{charges}{religion_flag}{status}{route_flag}{promo_flag}{upgrade_flag} "
+                f"[id:{u.unit_id}, idx:{u.unit_index}]"
+            )
         if u.targets:
             for t in u.targets:
                 lines.append(f"    >> CAN ATTACK: {t}")
@@ -325,13 +352,15 @@ def _append_builder_list(lines: list[str], builders: list[lq.BuilderInfo]) -> No
 
 
 def narrate_cities(
-    cities: list[lq.CityInfo], distances: list[str] | None = None
+    cities: list[lq.CityInfo], distances: list[str] | None = None, *, compact: bool = False,
 ) -> str:
     if not cities:
         return "No cities."
     lines = [f"{len(cities)} cities:"]
     if any(c.religion_majority_source == "InGame" for c in cities):
         lines.append("Religion majority: InGame native getter; GameCore freshness unverified.")
+    if compact:
+        lines.append("JSON rows: [id,name,pop,[x,y],[Food,Prod,Gold,Sci,Cul],Housing,Amenities,Growth,Building,Defense/Loyalty,Religion].")
     for c in cities:
         building = (
             c.currently_building
@@ -381,14 +410,22 @@ def narrate_cities(
             religion = "none (id:-1)"
         elif c.religion_majority_id is not None:
             religion = f"{c.religion_majority_name or 'name unknown'} (id:{c.religion_majority_id})"
-        lines.append(
-            f"  {c.name} (pop {c.population}) at ({c.x},{c.y}) — "
-            f"Food {c.food:.0f} Prod {c.production:.0f} Gold {c.gold:.0f} "
-            f"Sci {c.science:.0f} Cul {c.culture:.0f} | "
-            f"Housing {c.housing:.0f} Amenities {c.amenities} | "
-            f"Growth: {growth_str} | {prod_str}{defense}{loyalty_str} | Religion:{religion} "
-            f"[id:{c.city_id}]"
-        )
+        if compact:
+            lines.append(_compact_row(
+                c.city_id, c.name, c.population, [c.x, c.y],
+                [_compact_rounded(v) for v in (c.food, c.production, c.gold, c.science, c.culture)],
+                _compact_rounded(c.housing), c.amenities, growth_str,
+                prod_str.removeprefix("Building: "), (defense + loyalty_str).removeprefix(" | "), religion,
+            ))
+        else:
+            lines.append(
+                f"  {c.name} (pop {c.population}) at ({c.x},{c.y}) — "
+                f"Food {c.food:.0f} Prod {c.production:.0f} Gold {c.gold:.0f} "
+                f"Sci {c.science:.0f} Cul {c.culture:.0f} | "
+                f"Housing {c.housing:.0f} Amenities {c.amenities} | "
+                f"Growth: {growth_str} | {prod_str}{defense}{loyalty_str} | Religion:{religion} "
+                f"[id:{c.city_id}]"
+            )
         # Growth warnings
         if c.food_surplus < 0:
             lines.append(
@@ -1952,7 +1989,7 @@ def narrate_victory_warnings(vp: lq.VictoryProgress) -> str:
     return "\n".join(lines)
 
 
-def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
+def narrate_victory_progress(vp: lq.VictoryProgress, *, compact: bool = False) -> str:
     """Render observed victory progress, leaving strategy to the caller."""
     if not vp.players:
         return "No victory data available."
@@ -1977,13 +2014,23 @@ def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
 
     if (not vp.enabled_known and not enabled) or "VICTORY_TECHNOLOGY" in enabled:
         lines.append("\nSCIENCE")
+        if compact:
+            lines.append("JSON rows: [player,VP/needed,techs,spaceports,native progress/turn,space progress]; empty rate/progress=not reported.")
         for player in sorted(vp.players, key=lambda p: p.science_vp if p.science_vp is not None else -1, reverse=True):
-            lines.append(
-                f"  {player.name}: {_victory_number(player.science_vp)}/{_victory_number(player.science_vp_needed)} VP | "
-                f"{player.techs_researched} techs | {_victory_number(player.spaceports)} spaceports"
-                + (f" | native progress/turn {_victory_number(player.science_rate)}" if player.science_rate is not None else "")
-                + (f" | space progress {player.space_progress}" if player.space_progress else "")
-            )
+            if compact:
+                lines.append(_compact_row(
+                    player.name, f"{_victory_number(player.science_vp)}/{_victory_number(player.science_vp_needed)}",
+                    player.techs_researched, _victory_number(player.spaceports),
+                    _victory_number(player.science_rate) if player.science_rate is not None else "",
+                    player.space_progress,
+                ))
+            else:
+                lines.append(
+                    f"  {player.name}: {_victory_number(player.science_vp)}/{_victory_number(player.science_vp_needed)} VP | "
+                    f"{player.techs_researched} techs | {_victory_number(player.spaceports)} spaceports"
+                    + (f" | native progress/turn {_victory_number(player.science_rate)}" if player.science_rate is not None else "")
+                    + (f" | space progress {player.space_progress}" if player.space_progress else "")
+                )
         for project in vp.space_projects:
             detail = f"  {project.name}: {project.status}"
             if project.status == "building":
@@ -1996,27 +2043,39 @@ def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
 
     if (not vp.enabled_known and not enabled) or "VICTORY_CONQUEST" in enabled:
         lines.append("\nDOMINATION (original capitals)")
+        if compact:
+            lines.append("JSON rows: [player,original capital status].")
         for player in vp.players:
             held = vp.capitals_held.get(player.name)
             status = "unknown" if held is None else "held" if held else "lost"
-            lines.append(f"  {player.name}: original capital {status}")
+            lines.append(_compact_row(player.name, status) if compact else f"  {player.name}: original capital {status}")
 
     if (not vp.enabled_known and not enabled) or "VICTORY_CULTURE" in enabled:
         lines.append("\nCULTURE")
+        if compact:
+            lines.append("JSON rows: [player,tourism,domestic tourists,visiting tourists/required].")
         for player in vp.players:
-            lines.append(
-                f"  {player.name}: tourism {player.tourism} | domestic tourists {_victory_number(player.staycationers)}"
-                + f" | visiting tourists {_victory_number(player.culture_visiting)}/{_victory_number(player.culture_required)}"
-            )
+            if compact:
+                lines.append(_compact_row(
+                    player.name, player.tourism, _victory_number(player.staycationers),
+                    f"{_victory_number(player.culture_visiting)}/{_victory_number(player.culture_required)}",
+                ))
+            else:
+                lines.append(
+                    f"  {player.name}: tourism {player.tourism} | domestic tourists {_victory_number(player.staycationers)}"
+                    + f" | visiting tourists {_victory_number(player.culture_visiting)}/{_victory_number(player.culture_required)}"
+                )
+        if compact and vp.our_tourists_from:
+            lines.append("JSON rows: [player,our tourists from player,their domestic tourists].")
         for name, tourists in vp.our_tourists_from.items():
             domestic = vp.their_staycationers.get(name)
-            lines.append(
-                f"  Our tourists from {name}: {_victory_number(tourists)} | "
-                f"their domestic tourists: {_victory_number(domestic)}"
-            )
+            lines.append(_compact_row(name, _victory_number(tourists), _victory_number(domestic)) if compact else
+                         f"  Our tourists from {name}: {_victory_number(tourists)} | their domestic tourists: {_victory_number(domestic)}")
 
     if (not vp.enabled_known and not enabled) or "VICTORY_RELIGIOUS" in enabled:
         lines.append(f"\nRELIGION (founded {_victory_number(vp.religions_founded)}/{vp.religions_max})")
+        if compact:
+            lines.append("JSON rows: [player,majority,native religion cities,founded religion,religion name]; cities=engine statistic; not owned-city count; empty name=not reported.")
         for player in vp.players:
             majority = vp.religion_majority.get(player.name, "unknown")
             founded = vp.religion_founded_names.get(player.name)
@@ -2026,28 +2085,41 @@ def narrate_victory_progress(vp: lq.VictoryProgress) -> str:
             )
             if founded:
                 detail += f" ({founded})"
-            lines.append(detail)
+            lines.append(_compact_row(player.name, majority, player.religion_cities,
+                                     player.has_religion if player.has_religion is not None else "unknown",
+                                     founded or "") if compact else detail)
 
     if (not vp.enabled_known and not enabled) or "VICTORY_DIPLOMATIC" in enabled:
         lines.append("\nDIPLOMATIC")
+        if compact:
+            lines.append("JSON rows: [player,VP/needed].")
         for player in sorted(vp.players, key=lambda p: p.diplomatic_vp if p.diplomatic_vp is not None else -1, reverse=True):
-            lines.append(f"  {player.name}: {_victory_number(player.diplomatic_vp)}/{_victory_number(vp.diplomatic_vp_needed)} VP")
+            score = f"{_victory_number(player.diplomatic_vp)}/{_victory_number(vp.diplomatic_vp_needed)}"
+            lines.append(_compact_row(player.name, score) if compact else f"  {player.name}: {score} VP")
 
     lines.append("\nSCORE AND CIVILIZATION DATA")
+    if compact:
+        lines.append("JSON rows: [player,score,cities,science yield,culture yield,gold yield,military,civics].")
     for player in sorted(vp.players, key=lambda p: p.score, reverse=True):
-        lines.append(
-            f"  {player.name}: score {player.score} | {player.num_cities} cities | "
-            f"science {player.science_yield:g} | culture {player.culture_yield:g} | "
-            f"gold {player.gold_yield:+g} | military {player.military_strength} | "
-            f"civics {player.civics_completed}"
-        )
+        if compact:
+            lines.append(_compact_row(player.name, player.score, player.num_cities,
+                                     f"{player.science_yield:g}", f"{player.culture_yield:g}",
+                                     f"{player.gold_yield:+g}", player.military_strength, player.civics_completed))
+        else:
+            lines.append(
+                f"  {player.name}: score {player.score} | {player.num_cities} cities | "
+                f"science {player.science_yield:g} | culture {player.culture_yield:g} | "
+                f"gold {player.gold_yield:+g} | military {player.military_strength} | "
+                f"civics {player.civics_completed}"
+            )
     if vp.demographics:
         lines.append("\nDEMOGRAPHICS")
+        if compact:
+            lines.append("JSON rows: [metric,rank,ours,best,average,worst].")
         for name, metric in vp.demographics.items():
-            lines.append(
-                f"  {name}: rank {metric.rank} | ours {metric.value:g} | "
-                f"best {metric.best:g} | average {metric.average:g} | worst {metric.worst:g}"
-            )
+            lines.append(_compact_row(name, metric.rank, f"{metric.value:g}", f"{metric.best:g}",
+                                     f"{metric.average:g}", f"{metric.worst:g}") if compact else
+                         f"  {name}: rank {metric.rank} | ours {metric.value:g} | best {metric.best:g} | average {metric.average:g} | worst {metric.worst:g}")
     warnings = narrate_victory_warnings(vp)
     if warnings:
         lines.append("\n" + warnings)

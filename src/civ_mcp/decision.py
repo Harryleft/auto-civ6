@@ -102,8 +102,8 @@ async def read_context(game, include=(), city_ids=(), view="brief"):
     if any(pending.values()):
         result["error"] = "Pending operation exists; inspect and confirm its original request first."
         return result
-    if view not in {"brief", "structured"}:
-        raise ValueError("Decision view must be brief or structured")
+    if view not in {"brief", "compact", "structured"}:
+        raise ValueError("Decision view must be brief, compact or structured")
     selected = readers(include, city_ids)
     started = time.monotonic()
     rows = await game.conn.execute_write(build_query(selected), timeout=30.0)
@@ -156,7 +156,13 @@ async def read_context(game, include=(), city_ids=(), view="brief"):
             result["sections"][name] = {"status": "unknown", "error": "Requested city not in current owned-city scope"}
     for name, value in parsed.items():
         render = selected[name][2]
-        if view == "brief" and render:
+        if view == "compact" and name == "units":
+            value = nr.narrate_units(value, compact=True)
+        elif view == "compact" and name == "cities":
+            value = nr.narrate_cities(*value, compact=True)
+        elif view == "compact" and name == "victory":
+            value = nr.narrate_victory_progress(value, compact=True)
+        elif view in {"brief", "compact"} and render:
             value = render(value)
         elif name == "cities":
             value = {"cities": value[0], "distances": value[1]}

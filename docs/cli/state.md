@@ -9,9 +9,10 @@ state decision
 game decision --include research diplomacy trade
 game decision --city 65536 --include research
 game decision --view structured
+game decision --view compact
 ```
 
-`--city` 的 ID 必须来自本次真实查询，示例值不能直接照用。`--include` 只补充明确要求的领域；`--city` 补充指定自有城市的原生生产候选。默认 `--view brief` 复用现有领域报告；`structured` 返回解析后的数据，体积通常更大。未请求的领域不出现在 `sections` 中，不表示其内容为空。地图、规则、资源库存、政策、外交会话及议会详情仍按决策需要通过对应命令补查。
+`--city` 的 ID 必须来自本次真实查询，示例值不能直接照用。`--include` 只补充明确要求的领域；`--city` 补充指定自有城市的原生生产候选。默认 `--view brief` 复用现有领域报告；`compact` 为单位、城市与胜利进度共享表头，保留对应事实、未知标记、警告和明细，其他段保持原报告；`structured` 返回解析后的数据，体积通常更大。三种展示均重新读取当前事实，不依赖上次报告或缓存，不改变未决门禁与确认语义。未请求的领域不出现在 `sections` 中，不表示其内容为空。地图、规则、资源库存、政策、外交会话及议会详情仍按决策需要通过对应命令补查。
 
 先检查顶层 `status`、`identity`、`checks` 和各 section 的 `status`。读取前后核对文明、种子、玩家和回合，并核对实体数量、城市归属及胜利数据范围。任一未决请求在游戏 I/O 前返回 `blocked`；分项异常、缺少完整回执或范围不一致返回 `unknown`，保留其他已读事实。`ready` 表示本次约定的读取与范围检查通过，字段内原有的未知、不可见和原生统计冲突仍需保留。读取不是引擎原子快照，也不缓存或接管动作确认。
 
