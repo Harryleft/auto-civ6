@@ -1393,6 +1393,7 @@ def narrate_city_states(status: lq.EnvoyStatus) -> str:
             )
             lines.append(
                 f"  {cs.name} ({cs.city_state_type}) — {cs.envoys_sent} envoys{suz}{can} [player {cs.player_id}]"
+                f" [capital city id:{cs.capital_city_id if cs.capital_city_id is not None else 'unknown'}]"
             )
     if status.tokens_available > 0:
         lines.append("\nUse send_envoy(player_id) to send an envoy.")

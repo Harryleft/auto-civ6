@@ -337,7 +337,7 @@ def domain_parser(group: str):
         assign = command("set", "set_policies", "Assign explicit SLOT=POLICY_ID pairs; a changed plan must fill every final slot. Omitted slots stay unchanged.")
         assign.add_argument("assignments", nargs="+", help="Pairs separated by spaces or commas; for example 0=POLICY_DISCIPLINE 1=POLICY_URBAN_PLANNING. NONE may not leave an empty changed plan.")
     elif group == "city-state":
-        command("list", "get_city_states", "Read known city-states, player IDs, envoys and suzerains.")
+        command("list", "get_city_states", "Read known city-states, player IDs, revealed capital city IDs, envoys and suzerains. Use governor assign TYPE CITY_ID --owner PLAYER_ID for Amani.")
         envoy = command("envoy", "send_envoy", "Send one envoy; consumes one available token when confirmed.")
         envoy.add_argument("player_id", type=int, help="City-state player ID from city-state list")
     elif group == "governor":

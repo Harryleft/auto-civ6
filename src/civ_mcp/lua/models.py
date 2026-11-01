@@ -946,6 +946,7 @@ class CityStateInfo:
     suzerain_id: int  # player ID of suzerain (-1 = none)
     suzerain_name: str  # "None" or civ name
     can_send_envoy: bool
+    capital_city_id: int | None = None  # Full ID, only for a revealed capital.
 
 
 @dataclass

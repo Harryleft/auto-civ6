@@ -261,7 +261,21 @@ for i = 0, 62 do
                 if sCfg then suzName = Locale.Lookup(sCfg:GetCivilizationShortDescription()) end
             end
             local canSend = pInfluence:GetTokensToGive()>0 and {CAN_SEND} and "1" or "0"
-            print("CS|" .. i .. "|" .. name:gsub("|","/") .. "|" .. csType .. "|" .. envoys .. "|" .. suzID .. "|" .. suzName:gsub("|","/") .. "|" .. canSend)
+            -- Optional identity must not expose an unrevealed capital or
+            -- break envoys when a context lacks city/visibility APIs.
+            local capitalID = ""
+            pcall(function()
+                local capital = Players[i]:GetCities():GetCapitalCity()
+                local visibility = PlayersVisibility[me]
+                if capital and visibility and visibility:IsRevealed(capital:GetX(), capital:GetY())
+                    and capital:GetOwner() == i then
+                    local id = capital:GetID()
+                    if type(id) == "number" and id >= 0 and id == math.floor(id) then
+                        capitalID = tostring(id)
+                    end
+                end
+            end)
+            print("CS|" .. i .. "|" .. name:gsub("|","/") .. "|" .. csType .. "|" .. envoys .. "|" .. suzID .. "|" .. suzName:gsub("|","/") .. "|" .. canSend .. "|" .. capitalID)
         end
     end
 end
@@ -585,6 +599,7 @@ def parse_city_states_response(lines: list[str]) -> EnvoyStatus:
                         suzerain_id=int(parts[5]),
                         suzerain_name=parts[6],
                         can_send_envoy=parts[7] == "1",
+                        capital_city_id=int(parts[8]) if len(parts) > 8 and parts[8].isascii() and parts[8].isdigit() else None,
                     )
                 )
 

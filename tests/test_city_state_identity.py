@@ -1,7 +1,8 @@
 """Native influence eligibility distinguishes city-states from free cities."""
 import pytest
 from lupa.lua51 import LuaRuntime, LuaError
-from civ_mcp.lua.governance import build_city_states_query
+from civ_mcp.lua.governance import build_city_states_query, parse_city_states_response
+from civ_mcp.narrate import narrate_city_states
 
 
 def native():
@@ -38,3 +39,29 @@ def test_unavailable_city_state_identity_is_an_error_not_an_empty_list():
     lua.execute('Players[7].GetInfluence=function()return{CanReceiveInfluence=function()return nil end}end')
     with pytest.raises(LuaError,match='CITY_STATE_IDENTITY_UNKNOWN'):
         lua.execute(build_city_states_query())
+
+
+@pytest.mark.parametrize('owner', [None, 0])
+@pytest.mark.parametrize('revealed,city_owner,expected', [(True, 7, 196609), (False, 7, None), (True, 8, None)])
+def test_capital_identity_requires_revealed_tile_and_matching_owner(owner, revealed, city_owner, expected):
+    lua, rows = native()
+    lua.execute(f'''
+PlayersVisibility={{[0]={{IsRevealed=function()return {str(revealed).lower()} end}}}}
+Players[7].GetCities=function()return {{GetCapitalCity=function()return {{
+GetOwner=function()return {city_owner} end,GetID=function()return 196609 end,
+GetX=function()return 6 end,GetY=function()return 17 end}} end}} end
+''')
+    lua.execute(build_city_states_query(owner, {7: True}))
+    status = parse_city_states_response(rows)
+    assert status.city_states[0].capital_city_id == expected
+    text = narrate_city_states(status)
+    assert '[player 7]' in text
+    assert f'capital city id:{expected if expected is not None else "unknown"}' in text
+
+
+def test_legacy_and_unavailable_capital_remain_unknown():
+    legacy = parse_city_states_response(['CS|7|Hong Kong|Industrial|1|-1|None|1'])
+    assert legacy.city_states[0].capital_city_id is None
+    lua, rows = native()
+    lua.execute(build_city_states_query())
+    assert parse_city_states_response(rows).city_states[0].capital_city_id is None

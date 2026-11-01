@@ -1056,6 +1056,8 @@ async def get_city_states(ctx: Context) -> str:
 
     Shows envoy tokens available, each city-state's type (Scientific,
     Industrial, etc.), how many envoys you've sent, and who is suzerain.
+    Includes the full capital city ID when its tile is revealed; pair it with
+    the player ID as target_owner for assign_governor. Unknown is not zero.
     Use send_envoy to send an envoy.
     """
     gs = _get_game(ctx)
