@@ -100,7 +100,7 @@ local ok,unitID,pointsNetChange=pcall(function()
  reason="RESOURCE_UNCONFIRMED"
  local after=balance(r.owner,r.currency,r.class)
  local exactCost=math.abs(after-(r.before-r.cost))<0.01
- local requireExhausted=false
+ local requireAdvancedClass=false
  local function exhaustedClass()
   local count=0
   for _,entry in ipairs(Game.GetGreatPeople():GetTimeline()) do
@@ -111,18 +111,32 @@ local ok,unitID,pointsNetChange=pcall(function()
   end
   return count==1
  end
+ local function successorClass()
+  local class=GameInfo.GreatPersonClasses and GameInfo.GreatPersonClasses[r.class]
+  if not class or type(class.GreatPersonClassType)~="string" or #class.GreatPersonClassType==0 then return false end
+  local count,candidate=0,nil
+  for _,entry in ipairs(Game.GetGreatPeople():GetTimeline()) do
+   if entry.Class==r.class then count=count+1;candidate=entry end
+  end
+  if count~=1 or not scopeIndex(candidate.Individual) or candidate.Individual==r.individual then return false end
+  local individual=GameInfo.GreatPersonIndividuals[candidate.Individual]
+  return individual~=nil and individual.GreatPersonClassType==class.GreatPersonClassType
+   and type(candidate.Cost)=="number" and candidate.Cost>=0 and candidate.Cost<math.huge
+ end
+ local function advancedClass() return exhaustedClass() or successorClass() end
  if not exactCost then
-  -- T181 Prophet and T239 exhausted Engineer pool receipts differ from the
-  -- point quote. Exact new ownership plus a closed native pool below proves
-  -- recruitment; report the quote/net change without claiming the paid cost.
+  -- T181 Prophet, T239 exhausted Engineer and T195 Scientist-with-successor
+  -- receipts differ from the point quote. The original request, exact new
+  -- ownership and native pool transition prove recruitment; report quote/net
+  -- change without inferring a discount, minimum balance or actual paid cost.
   local class=GameInfo.GreatPersonClasses and GameInfo.GreatPersonClasses[r.class]
   assert(r.kind=="recruit_great_person" and r.currency=="GP_POINTS" and class
    and type(class.GreatPersonClassType)=="string" and #class.GreatPersonClassType>0)
   local singleProphet=class.GreatPersonClassType=="GREAT_PERSON_CLASS_PROPHET"
    and class.MaxPlayerInstances==1 and after==r.before
   if not singleProphet then
-   requireExhausted=true
-   assert(after<=r.before and exhaustedClass())
+   requireAdvancedClass=true
+   assert(after<=r.before and advancedClass())
   end
  end
  reason="NEW_INDIVIDUAL_UNIT_UNCONFIRMED"
@@ -150,7 +164,7 @@ local ok,unitID,pointsNetChange=pcall(function()
   local gp=Game.GetGreatPeople()
   assert(gp:CanRecruitPerson(r.owner,r.individual)==false)
   for _,entry in ipairs(gp:GetTimeline()) do assert(entry.Individual~=r.individual) end
-  if requireExhausted then assert(exhaustedClass()) end
+  if requireAdvancedClass then assert(advancedClass()) end
   return found,after-r.before
  end
  return found

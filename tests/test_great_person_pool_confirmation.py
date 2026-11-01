@@ -573,3 +573,126 @@ end
     assert expected in result
     assert 'OUTCOME_UNKNOWN' not in result
     assert conn.lua.eval('#submissions') == 1
+
+
+def _t195_scientist_successor(conn):
+    conn.lua.execute('''
+points,recruitCost=1232.8515625,1145
+current={{Individual=146,Class=3,Cost=1145,Claimant=0}}
+GameInfo.GreatPersonIndividuals[146]={Name='Abdus Salam',GreatPersonClassType='GREAT_PERSON_CLASS_SCIENTIST'}
+GameInfo.GreatPersonIndividuals[148]={Name='Next scientist',GreatPersonClassType='GREAT_PERSON_CLASS_SCIENTIST'}
+GameInfo.GreatPersonClasses={[3]={GreatPersonClassType='GREAT_PERSON_CLASS_SCIENTIST'}}
+function applyPool(op,p)
+ assert(op==10 and p.individual==146)
+ points=100;addGP(6291465,146)
+ current={{Individual=148,Class=3,Cost=1145,Claimant=-1}}
+end
+''')
+
+
+def test_t195_scientist_successor_separates_quote_and_net_points_without_guessing_cost():
+    conn = GreatPeopleConn(); _t195_scientist_successor(conn)
+    state = GameState(conn); ctx = make_ctx(game=state)
+    result = asyncio.run(server.recruit_great_person(ctx, 146))
+    assert result == 'RECRUITED|Abdus Salam|individual:146|gp_points_quote:1145|gp_points_net_change:-1132.8515625|unit:6291465'
+    assert 'gp_points_cost:' not in result
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('change', [
+    'current={}',
+    'current={{Individual=148,Class=4,Cost=1145}}',
+    'current={{Individual=148,Class=3,Cost=1145},{Individual=148,Class=3,Cost=1145}}',
+    'current={{Individual=148,Class=3,Cost=1145},{Class=3,Cost=2147483647}}',
+    'current[1].Individual=-1', 'current[1].Individual=148.5',
+    'current[1].Individual="148"', 'current[1].Cost=nil', 'current[1].Cost=0/0',
+    'GameInfo.GreatPersonIndividuals[148]=nil',
+    'GameInfo.GreatPersonIndividuals[148].GreatPersonClassType="GREAT_PERSON_CLASS_ENGINEER"',
+    'GameInfo.GreatPersonClasses=nil',
+    'current[2]={Individual=146,Class=4,Cost=1145}',
+    'gp.CanRecruitPerson=function() return true end',
+    'gp.CanRecruitPerson=function() return nil end',
+    'units={}', 'units[6291465].individual=148', 'units[6291465].owner=1',
+    'addGP(6291466,146)', 'points=1233', 'busy=true',
+    '__civmcpGPPool.returned=false', '__civmcpGPPool.entered=false',
+    '__civmcpGPPool.token="different-request"', 'turn=42', 'seed=123',
+])
+def test_successor_points_exception_requires_original_request_unique_person_and_valid_native_pool(change):
+    conn = GreatPeopleConn(); _t195_scientist_successor(conn)
+    state = GameState(conn); conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.recruit_great_person(146))
+    conn.lua.execute('applyPool(submissions[1].op,submissions[1].params);' + change)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.recruit_great_person(146))
+    assert state.pending_action_kind == 'recruit_great_person'
+    assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('after', [0, 99, 100, 1232.8515625])
+def test_successor_receipt_reports_observed_net_without_assuming_a_point_floor(after):
+    conn = GreatPeopleConn(); _t195_scientist_successor(conn)
+    state = GameState(conn); conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.recruit_great_person(146))
+    conn.lua.execute(f'applyPool(submissions[1].op,submissions[1].params);points={after}')
+    result = asyncio.run(state.recruit_great_person(146))
+    assert result.startswith('RECRUITED|Abdus Salam|individual:146|gp_points_quote:1145|')
+    assert float(result.split('gp_points_net_change:')[1].split('|')[0]) == after - 1232.8515625
+    assert 'gp_points_cost:' not in result
+    assert conn.lua.eval('#submissions') == 1
+
+
+def test_preexisting_exact_scientist_does_not_prove_new_successor_recruitment():
+    conn = GreatPeopleConn(); _t195_scientist_successor(conn)
+    conn.lua.execute('addGP(6291465,146)')
+    state = GameState(conn)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.recruit_great_person(146))
+    assert conn.lua.eval('#submissions') == 1
+
+
+def test_lost_successor_recruitment_reply_confirms_original_without_requesting_next_person():
+    conn = GreatPeopleConn(); _t195_scientist_successor(conn); conn.lose_reply = True
+    state = GameState(conn); ctx = make_ctx(game=state)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(server.recruit_great_person(ctx, 146))
+    assert state.pending_action_kind == 'recruit_great_person'
+    result = asyncio.run(server.recruit_great_person(ctx, 146))
+    assert 'gp_points_quote:1145|gp_points_net_change:-1132.8515625|unit:6291465' in result
+    assert conn.lua.eval('#submissions') == 1
+    assert conn.lua.eval('submissions[1].params.individual') == 146
+    assert state.pending_action_summary is None
+
+
+def test_deferred_successor_recruitment_blocks_other_intents_and_waits_for_exact_unit():
+    conn = GreatPeopleConn(); _t195_scientist_successor(conn)
+    state = GameState(conn); conn.lua.execute('deferred=true')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.recruit_great_person(146))
+    for method, args in [
+        (state.recruit_great_person, (148,)),
+        (state.patronize_great_person, (146, 'YIELD_GOLD')),
+        (state.reject_great_person, (146,)),
+        (state.purchase_tile, (65537, 10, 10)),
+    ]:
+        assert 'OUTCOME_UNKNOWN' in asyncio.run(method(*args))
+    conn.lua.execute('applyPool(submissions[1].op,submissions[1].params);units={}')
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(state.recruit_great_person(146))
+    conn.lua.execute('addGP(6291465,146)')
+    assert asyncio.run(state.recruit_great_person(146)).startswith('RECRUITED|Abdus Salam|')
+    assert conn.lua.eval('#submissions') == 1
+
+
+@pytest.mark.parametrize('kind,currency,change', [
+    ('patronize_great_person', 'YIELD_GOLD', 'gold=599'),
+    ('patronize_great_person', 'YIELD_FAITH', 'faith=449'),
+    ('reject_great_person', None, 'points=129;current={{Individual=43,Class=3,Cost=200}}'),
+])
+def test_successor_pool_does_not_relax_gold_faith_or_rejection_exact_cost(kind, currency, change):
+    conn = GreatPeopleConn(); state = GameState(conn)
+    conn.lua.execute('''deferred=true
+GameInfo.GreatPersonClasses={[3]={GreatPersonClassType='GREAT_PERSON_CLASS_SCIENTIST'}}
+GameInfo.GreatPersonIndividuals[43].GreatPersonClassType='GREAT_PERSON_CLASS_SCIENTIST'
+''')
+    args = (42, currency) if currency else (42,)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(getattr(state, kind)(*args))
+    conn.lua.execute('applyPool(submissions[1].op,submissions[1].params);' + change)
+    assert 'OUTCOME_UNKNOWN' in asyncio.run(getattr(state, kind)(*args))
+    assert conn.lua.eval('#submissions') == 1
+    assert state.pending_action_kind == kind
