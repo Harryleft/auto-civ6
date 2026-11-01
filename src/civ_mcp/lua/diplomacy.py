@@ -581,11 +581,11 @@ end"""
 
     return f"""
 {validation_block}
--- Clean stale session for THIS target only (not all session IDs).
--- Mass-closing sessions via IsSessionIDOpen loop corrupts AI diplomacy state.
-local staleSid = DiplomacyManager.FindOpenSessionID(me, target)
-if staleSid and staleSid >= 0 then
-    _rel_step("close_stale", function() return DiplomacyManager.CloseSession(staleSid) end)
+-- 开放会话可能是本回合刚触发的初次会面，不能当作残留直接取消。
+-- 由模型通过现有回应／关闭入口处理，再发起新的关系意图。
+local existingSid = DiplomacyManager.FindOpenSessionID(me, target)
+if existingSid and existingSid >= 0 then
+    {_bail("ERR:DIPLOMACY_SESSION_OPEN|Existing target session preserved; inspect diplomacy pending, then explicitly use diplomacy respond or diplomacy close before starting a new action")}
 end
 -- Open session with the correct action string
 _rel_step("request", function() return DiplomacyManager.RequestSession(me, target, "{session_str}") end)

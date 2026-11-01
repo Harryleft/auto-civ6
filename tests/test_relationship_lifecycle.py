@@ -42,6 +42,39 @@ def test_lost_relationship_ack_is_retained_and_repeat_only_confirms():
         assert len(conn.lua.globals().friendship_requests)==1
     asyncio.run(scenario())
 
+
+@pytest.mark.parametrize('action', ['DIPLOMATIC_DELEGATION', 'DECLARE_FRIENDSHIP', 'DENOUNCE'])
+@pytest.mark.parametrize('statement', ['FIRST_MEET_NEAR_RECIPIENT', 'RESIDENT_EMBASSY', 'MAKE_DEAL'])
+@pytest.mark.parametrize('incoming', [True, False])
+def test_existing_target_session_is_preserved_without_relationship_submission(action, statement, incoming):
+    from test_access_confirmation_lua import AccessConn
+
+    conn = AccessConn()
+    conn.lua.globals().existing_statement = statement
+    conn.lua.execute(f'''
+sessions[1]=71
+infos[71]={{FromPlayer={1 if incoming else 0},ToPlayer={0 if incoming else 1},StatementType=existing_statement}}
+Players[0]:GetDiplomacy().GetDenounceTurn=function() return -1 end
+request_calls=0
+local request=DiplomacyManager.RequestSession
+DiplomacyManager.RequestSession=function(...)
+ request_calls=request_calls+1
+ return request(...)
+end
+''')
+    state = GameState(conn)
+
+    result = asyncio.run(state.send_diplomatic_action(1, action))
+
+    assert result.startswith('Error: RELATIONSHIP_REFUSED|DIPLOMACY_SESSION_OPEN|'), result
+    assert 'diplomacy pending' in result and 'diplomacy respond' in result and 'diplomacy close' in result
+    assert conn.lua.globals().sessions[1] == 71
+    assert conn.lua.globals().infos[71].StatementType == statement
+    assert conn.lua.globals().request_calls == 0
+    assert list(conn.lua.globals().mutations.values()) == []
+    assert not state.pending_action_summary
+
+
 @pytest.mark.parametrize('stage',['request','response','close'])
 @pytest.mark.parametrize('failure',['throw','false','cancel'])
 def test_partial_native_phase_never_replays(stage,failure):
