@@ -18,6 +18,23 @@ game decision --view compact
 
 `blockers` 仅为通知阻塞；空列表不证明所有推进前提满足。`turn end` 仍执行原有就绪、外交、议会和单次提交检查。需要诊断等待阶段或确认旧请求时使用 `turn status` 及原入口；`verify state` 继续使用独立的验收快照。
 
+## 显式变化展示
+
+```text
+game decision --view changes
+game decision --view changes --since TOKEN_FROM_PREVIOUS_DISPLAY
+```
+
+`changes` 是前台 CLI 的无损展示选项，内部每次仍执行完整 `get_decision_context(view="compact")`；不省略原生读取，不选择策略，不影响 Runtime 的请求和门禁。首次调用返回全量当前事实及 `presentation.token`。只有调用者明确提供上一份已解码展示的精确 token，才可缩短重复的长文本；遗漏或不匹配 token 时返回全量，并在 `reset_reason` 说明原因。默认 brief、compact、structured 和 `state decision` 不改变。
+
+每次完整保留当前 `status`、`pending`、`identity`、`checks`、各段状态及错误。`data` 为字符串时含义与 compact 相同；较短的变化表示则为 `encoding="line-splices-v1"` 对象：`splices` 中每项 `[start, delete_count, replacement_text]` 使用**旧段文本的零起点行号**，删除指定行数后插入文本，所有位置均相对于同一旧段，行尾符号保留。按顺序拷贝未覆盖的旧行并插入新文本，可恢复原文。`base_sha256` 校验旧段；顶层 `presentation.sha256` 校验完整重建结果。哈希使用 UTF-8、`ensure_ascii=False`、无额外空格的 JSON 序列化。补丁比全段更大时直接展示全段。
+
+`anchors` 给出变更附属行所属的当前单位／城市行或表头；`old_anchors` 标明删除附属行的旧所属实体。`removed_from_observation` 明确列出本次已不在单位／城市观察中的旧行，**不表示单位阵亡或城市被占领**。这些行仅帮助理解精确补丁；不参与游戏规则判断。数组、null、空集合、错误与未知字段不借用旧值补齐。
+
+CLI 内存只保存一份展示基线，绑定当前 CLI／Runtime、查询参数、文明、种子、玩家与回合；同回合或下一回合允许比对。参数变化、回合倒退／跳跃、身份变化或无法验证、本次决策非 ready、传输未知和世界替换尝试都会失效。普通已确认动作、正常推进及独立只读查询不清除历史展示；推进暂时 pending 也不使它变成当前事实，此时再查 decision 仍由原门禁拒绝并失效。普通保存不替换世界。更换 CLI、缺少完整基线或上下文中不再保留基线时，省略 `--since` 重新读取全量，不能猜测未展示的事实。
+
+完整原始 RPC 始终先写入 `debug-response-*.json`。`tool_result` 事件结构与 relay 完成边界不变；显式 changes 的 `content` 和 `structuredContent.outcome.data` 使用同一展示投影，不同时混入全量原文与补丁。状态、错误码及计时身份保持原值；不支持或相互冲突的协议回应原样显示且不建立基线。消费者先查看 `presentation`，再展示各段 `data`；重建时保留上一份完整解码文档与其 `presentation`，可用纯函数 `devtools.decision_display.restore_display` 校验。想持续减少重复输出，应保持 changes 的查询范围固定，临时追加的领域可另用对应只读命名命令。
+
 ## 自动实机只读验收
 
 `civ6 verify state` 启动一个 MCP 会话，先检查其 pending，再查询概览和结构化 `get_game_snapshot`，最后核对服务身份及 pending，关闭自有 MCP。stdout 只输出一份 JSON；详细事件和原始响应保留在证据目录。可选 `--expect-turn`、`--expect-civilization` 约束预期现场，不匹配返回 `BLOCKED`，不自动换档。每个 RPC 的默认超时为 300 秒，可用 `--timeout` 调整。

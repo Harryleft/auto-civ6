@@ -103,6 +103,8 @@ class Intent:
     arguments: dict
     dry_run: bool = False
     execute: bool = False
+    changes: bool = False
+    since: str | None = None
 
 
 class HelpRequested(Exception):
@@ -130,7 +132,7 @@ def domain_parser(group: str):
         mutation = not operation(tool).readonly
         basic_notes = ("Query current state first. Preview with --dry-run; actual execution sends once through Runtime. "
                        "Unknown outcomes require inspection of pending, never automatic replay." if mutation else
-                       "Returns the original MCP result in a JSONL tool_result event.")
+                       "Returns a JSONL tool_result event; explicit CLI display options may losslessly project its text. The original MCP response remains in evidence.")
         child = commands.add_parser(name, help=description, description=description,
             epilog=" ".join(filter(None, (basic_notes, SHORT_HELP.get((group, name))))))
         child.set_defaults(tool=tool)
@@ -438,8 +440,10 @@ def domain_parser(group: str):
         decision.add_argument("--include", nargs="+", choices=("research", "diplomacy", "trade"), default=argparse.SUPPRESS)
         decision.add_argument("--city", dest="city_ids", nargs="+", type=int, default=argparse.SUPPRESS,
                               help="Native owned city IDs whose production choices to include")
-        decision.add_argument("--view", choices=("brief", "compact", "structured"), default=argparse.SUPPRESS,
-                              help="brief: existing reports; compact: current facts with shared table headings; structured: parsed data")
+        decision.add_argument("--view", choices=("brief", "compact", "structured", "changes"), default=argparse.SUPPRESS,
+                              help="brief: existing reports; compact: shared headings; structured: parsed data; changes: freshly read compact facts with explicit lossless display baseline")
+        decision.add_argument("--since", default=argparse.SUPPRESS,
+                              help="With --view changes only: exact token from the previous decoded display; omitted/mismatched tokens return full current facts")
         command("launch", "launch_game", "Explicitly launch Civ6; does not choose or load a save.")
         command("menu", "return_to_main_menu", "Return to the native main menu; keeps the process, never loads or saves.")
         command("stop", "kill_game", "Explicitly stop Civ6; pending lifecycle gates still apply.")
@@ -531,6 +535,14 @@ def parse_command(line: str) -> Intent:
     values = vars(domain_parser(words[0]).parse_args(words[1:]))
     tool, dry_run = values.pop("tool"), values.pop("dry_run", False)
     execute = values.pop("execute", False)
+    changes, since = False, None
+    if tool == "get_decision_context":
+        changes = values.get("view") == "changes"
+        since = values.pop("since", None)
+        if since is not None and not changes:
+            raise CommandError("INVALID_DEBUG_ARGUMENT", "--since requires --view changes")
+        if changes:
+            values["view"] = "compact"
     issues = validate_arguments(tool, values)
     if issues:
         raise CommandError("INVALID_DEBUG_ARGUMENT", issues[0]["message"],
@@ -553,4 +565,4 @@ def parse_command(line: str) -> Intent:
         values["assignments"] = ",".join(normalized)
     if tool == "patronize_great_person":
         values["yield_type"] = "YIELD_" + values.pop("currency").upper()
-    return Intent(tool, values, dry_run, execute)
+    return Intent(tool, values, dry_run, execute, changes, since)

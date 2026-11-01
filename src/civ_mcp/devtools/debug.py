@@ -207,8 +207,12 @@ class DebugSession:
         from civ_mcp.devtools.turn_timing import TurnTiming
         self.timing = TurnTiming()
         self.command_events = None
+        from civ_mcp.devtools.decision_display import DecisionDisplay
+        self.decision_display = DecisionDisplay(evidence.summary["run_id"])
 
     def event(self, event: str, **data) -> dict:
+        if event in {"command_blocked", "tool_outcome_unknown"}:
+            self.decision_display.invalidate("command_unconfirmed")
         self.sequence += 1
         value = {"event": event, "sequence": self.sequence, "run_id": self.evidence.summary["run_id"],
                  "timestamp": now(), **data}
@@ -237,6 +241,7 @@ class DebugSession:
         elif self.identity != identity:
             self.identity_lost = True
         if self.identity_lost:
+            self.decision_display.invalidate("owner_changed")
             raise CommandError("SESSION_CHANGED", "Original server identity was lost; do not continue game commands")
         if self.shared_pending_path is not None:
             # Experimental hotseat has an additional cross-seat owner on disk.
@@ -251,6 +256,8 @@ class DebugSession:
                 raise CommandError("HOTSEAT_PENDING_UNKNOWN", f"Shared pending is unreadable: {exc}") from exc
             value["shared_pending"] = shared
         self.state["runtime"] = value
+        if self.transport_unknown:
+            self.decision_display.invalidate("transport_unknown")
         self.evidence.json("runtime-status", value)
         return value
 
@@ -263,7 +270,8 @@ class DebugSession:
         value = await self.runtime()
         self.event("session_ready", runtime=value, offline=self.offline, compact=self.compact, help="help [TOPIC [COMMAND]]")
 
-    async def call(self, tool: str, arguments: dict, *, dry_run: bool = False):
+    async def call(self, tool: str, arguments: dict, *, dry_run: bool = False,
+                   changes: bool = False, since: str | None = None):
         if tool == "run_lua" and not self.developer:
             raise CommandError("DEVELOPER_MODE_REQUIRED", "Arbitrary Lua is unavailable in gameplay sessions",
                                hint="Use named gameplay commands. Only an explicitly authorized diagnostic session starts with civ6 debug --developer.")
@@ -307,6 +315,7 @@ class DebugSession:
                      "or keep it for evidence. Never start a second controller for the same game.",
             )
         runtime = await self.runtime()
+        self.decision_display.before_call(tool)
         if operation(tool).reject_shared_pending and runtime.get("shared_pending"):
             raise CommandError("VERIFY_PENDING", "A shared hotseat request still owns this run",
                                hint="Inspect pending and confirm its original intent; a snapshot cannot retire or bypass the shared request.")
@@ -328,6 +337,15 @@ class DebugSession:
         self.evidence.json(f"debug-response-{request['sequence']:06}", result.model_dump(mode="json"))
         error = tool_error(tool, result)
         displayed = result.model_dump(mode="json")
+        from civ_mcp.results import explicit_outcome
+        outcome = explicit_outcome(displayed)
+        if ((tool == "get_decision_context" and (error or not outcome or outcome["status"] != "ready"))
+                or (outcome and outcome["status"] == "unknown")):
+            self.decision_display.invalidate("command_unconfirmed")
+        if changes and tool == "get_decision_context" and not self.transport_unknown and not self.identity_lost:
+            from civ_mcp.devtools.decision_display import project_result
+            displayed = project_result(self.decision_display, displayed, arguments=arguments,
+                                       owner=self.identity, since=since)
         if self.compact:
             displayed = compact_result(displayed)
         self.event("tool_result", request=request["sequence"], tool=tool,
@@ -399,7 +417,8 @@ class DebugSession:
                     # A single explicit intent: schema failure raises before submission.
                     # The real call retains every policy and Runtime gate.
                     await self.call(intent.tool, intent.arguments, dry_run=True)
-                await self.call(intent.tool, intent.arguments, dry_run=intent.dry_run)
+                await self.call(intent.tool, intent.arguments, dry_run=intent.dry_run,
+                                changes=intent.changes, since=intent.since)
         elif head == "verify" and parts == ["verify", "state"]:
             await self.verify_state()
         elif head in HELP and parts == [head, "--help"]:
