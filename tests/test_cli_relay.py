@@ -20,6 +20,35 @@ relay = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(relay)
 
 
+@pytest.mark.parametrize("terminal", ["tool_result", "command_blocked", "tool_outcome_unknown"])
+def test_execute_drains_preview_and_final_result_before_next_command(terminal):
+    command = "turn end --execute"
+    stream = iter([
+        {"event": "command", "input": command},
+        {"event": "dry_run", "would_send": False},
+        {"event": terminal, "request": 3},
+        {"event": "command", "input": "pending"},
+        {"event": "pending", "runtime": {"has_pending": True}},
+    ])
+    first = relay.receive_command(lambda: next(stream), command)
+    assert [event["event"] for event in first] == ["command", "dry_run", terminal]
+    second = relay.receive_command(lambda: next(stream), "pending")
+    assert second[-1] == {"event": "pending", "runtime": {"has_pending": True}}
+
+
+@pytest.mark.parametrize("command,terminal", [
+    ("turn end --dry-run", "dry_run"),
+    ("save create --dry-run -- '--execute'", "dry_run"),
+    ("save create 'name --execute suffix' --dry-run", "dry_run"),
+    ("turn end --execute --dry-run", "command_blocked"),
+    ("turn end '--execute", "command_blocked"),
+    ("turn end --execute --help", "help"),
+])
+def test_nonexecution_and_invalid_commands_keep_their_completion(command, terminal):
+    stream = iter([{"event": "command", "input": command}, {"event": terminal}])
+    assert relay.receive_command(lambda: next(stream), command)[-1] == {"event": terminal}
+
+
 def test_verification_drains_nested_results_before_next_command():
     stream = iter([
         {"event": "command", "input": "verify state"},
@@ -109,7 +138,7 @@ def test_real_offline_relay_preserves_unicode_identity_and_authentication(tmp_pa
     endpoint = Path(tempfile.gettempdir()) / ('c6-' + uuid.uuid4().hex)
     proof = tmp_path / 'proof'
     command = [sys.executable, str(script), 'serve', '--socket', str(endpoint),
-               '--evidence', str(proof), '--offline', *(['--tcp'] if tcp else [])]
+               '--evidence', str(proof), '--offline', *(['--tcp', '--compact'] if tcp else [])]
     # Simulate Windows redirected stdin even when running this test on POSIX.
     process = subprocess.Popen(command, cwd=script.parents[1], stdout=subprocess.PIPE,
         stderr=subprocess.PIPE, text=True, encoding='utf-8',
@@ -121,6 +150,7 @@ def test_real_offline_relay_preserves_unicode_identity_and_authentication(tmp_pa
         assert line, process.stderr.read()
         value = json.loads(line)
         assert value['event'] == 'relay_ready'
+        assert json.loads((proof/'ready.json').read_text(encoding='utf-8'))['compact'] is tcp
         token = None
         if endpoint.is_file():
             token = json.loads(endpoint.read_text(encoding='utf-8'))['token']
@@ -148,6 +178,10 @@ def test_real_offline_relay_preserves_unicode_identity_and_authentication(tmp_pa
         original = send('pending', identity)
         assert send('pending', identity) == original
         assert len(list((proof / 'requests').glob('*.json'))) == 1
+        blocked = send('turn end --execute')
+        assert [event['event'] for event in blocked['events']] == [
+            'command', 'dry_run', 'command_blocked']
+        assert blocked['events'][-1]['code'] == 'OFFLINE_ONLY'
         search = 'knowledge search 写作 --topic technologies --limit 1'
         response = send(search)
         assert response['state'] == 'response_received', response

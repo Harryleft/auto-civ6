@@ -33,7 +33,10 @@ def test_compact_only_removes_exact_duplicate_text_and_preserves_original():
     value = compact_result(original)
     assert value == dict(content=original["content"], isError=True)
     assert "structuredContent" in original
-    for structured in ({"facts": 7}, {"result": "different"}, {"result": "facts", "status": "unknown"}):
+    richer = original | {"structuredContent": {"result": "facts", "status": "unknown"}}
+    assert compact_result(richer)["structuredContent"] == {"status": "unknown"}
+    assert richer["structuredContent"]["result"] == "facts"
+    for structured in ({"facts": 7}, {"result": "different"}):
         richer = original | {"structuredContent": structured}
         assert compact_result(richer) == richer
 
@@ -47,6 +50,31 @@ def test_compact_stdout_keeps_full_protocol_evidence_and_error_detection(tmp_pat
     # Compact display must retain facts that timing/verification consume.
     assert raw["structuredContent"]["outcome"] == event["result"]["structuredContent"]["outcome"]
     assert raw["structuredContent"]["outcome"]["data"]["turn"] == 12
+    assert "result" not in event["result"]["structuredContent"]
+
+
+def test_execute_previews_once_and_preserves_pending_single_submission(tmp_path):
+    command = 'unit move 0 22 9 --execute\n'
+    status, state, events, engine, _ = run_fake(tmp_path,
+        command + 'pending\n' + command + 'pending\nquit\n')
+    assert status == 'PASS' and engine['submissions'] == 1
+    assert state['tool_calls'] == 2
+    assert [e['runtime']['has_pending'] for e in events if e['event'] == 'pending'] == [True, False]
+    assert len([e for e in events if e['event'] == 'dry_run']) == 2
+    for start in [i for i, e in enumerate(events) if e['event'] == 'tool_started']:
+        assert events[start - 1]['event'] == 'dry_run'
+        assert events[start - 1]['pending_checked'] is False
+
+
+def test_execute_cannot_bypass_unknown_transport_or_invalid_arguments(tmp_path):
+    status, state, events, engine, _ = run_fake(tmp_path,
+        'unit move bad 22 9 --execute\ncall test_slow {}\n'
+        'unit move 0 22 9 --execute\npending\nquit --abandon\n', timeout=2)
+    assert status == 'BLOCKED' and engine['submissions'] == 1
+    assert state['tool_calls'] == 1
+    assert state['transport_unknown']['tool'] == 'test_slow'
+    assert any(e.get('code') == 'INVALID_DEBUG_ARGUMENT' for e in events)
+    assert any(e.get('code') == 'TRANSPORT_UNRESOLVED' for e in events)
 
 
 def fake_cli(tmp_path, stdin=subprocess.PIPE):

@@ -156,9 +156,15 @@ def strict_json(value: str) -> dict:
 def compact_result(result: dict) -> dict:
     """Drop only a provable duplicate; retain structured-only fields and errors."""
     content = result.get("content", [])
+    structured = result.get("structuredContent")
     if (len(content) == 1 and content[0].get("type") == "text"
-            and result.get("structuredContent") == {"result": content[0].get("text")}):
-        return {key: value for key, value in result.items() if key != "structuredContent"}
+            and isinstance(structured, dict) and "result" in structured
+            and structured["result"] == content[0].get("text")):
+        remaining = {key: value for key, value in structured.items() if key != "result"}
+        compact = {key: value for key, value in result.items() if key != "structuredContent"}
+        if remaining:
+            compact["structuredContent"] = remaining
+        return compact
     return result
 
 
@@ -389,6 +395,10 @@ class DebugSession:
             except HelpRequested as help_request:
                 self.event("help", topic=head, **help_request.document)
             else:
+                if intent.execute:
+                    # A single explicit intent: schema failure raises before submission.
+                    # The real call retains every policy and Runtime gate.
+                    await self.call(intent.tool, intent.arguments, dry_run=True)
                 await self.call(intent.tool, intent.arguments, dry_run=intent.dry_run)
         elif head == "verify" and parts == ["verify", "state"]:
             await self.verify_state()

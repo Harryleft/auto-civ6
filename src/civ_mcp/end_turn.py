@@ -36,7 +36,10 @@ class TurnContext(Protocol):
 
 END_TURN_TIMEOUT_SECONDS = 180.0
 POLL_INTERVAL_SECONDS = 2.0
-DIPLOMACY_PROBE_SECONDS = 10.0
+# A dialogue stops AI processing until the model responds. Check on the normal
+# bounded polling cadence instead of adding a separate ten-second blind window.
+# Already-completed turns break before this read-only probe, so pay no extra I/O.
+DIPLOMACY_PROBE_SECONDS = POLL_INTERVAL_SECONDS
 INFORMATION_PROBE_SECONDS = 5.0
 CONGRESS_PROBE_SECONDS = 5.0
 
@@ -603,7 +606,7 @@ class TurnProgress:
 
         started = time.monotonic()
         deadline = started + END_TURN_TIMEOUT_SECONDS
-        next_diplomacy_probe = started + DIPLOMACY_PROBE_SECONDS
+        next_diplomacy_probe = started
         next_information_probe = started
         next_congress_probe = started
         turn_after = None

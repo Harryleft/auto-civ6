@@ -102,6 +102,7 @@ class Intent:
     tool: str
     arguments: dict
     dry_run: bool = False
+    execute: bool = False
 
 
 class HelpRequested(Exception):
@@ -134,7 +135,9 @@ def domain_parser(group: str):
             epilog=" ".join(filter(None, (basic_notes, SHORT_HELP.get((group, name))))))
         child.set_defaults(tool=tool)
         if mutation:
-            child.add_argument("--dry-run", action="store_true", help="Validate schema and emit a plan; never send the target tool")
+            mode = child.add_mutually_exclusive_group()
+            mode.add_argument("--dry-run", action="store_true", help="Validate schema and emit a plan; never send the target tool")
+            mode.add_argument("--execute", action="store_true", help="Explicitly authorize static preview followed by one call; Runtime still checks pending and game rules, never retries")
         return child
 
     def coordinates(child):
@@ -521,6 +524,7 @@ def parse_command(line: str) -> Intent:
             hint="Close the quoted argument; use double quotes around names with spaces. No shell expansion is performed.") from exc
     values = vars(domain_parser(words[0]).parse_args(words[1:]))
     tool, dry_run = values.pop("tool"), values.pop("dry_run", False)
+    execute = values.pop("execute", False)
     issues = validate_arguments(tool, values)
     if issues:
         raise CommandError("INVALID_DEBUG_ARGUMENT", issues[0]["message"],
@@ -543,4 +547,4 @@ def parse_command(line: str) -> Intent:
         values["assignments"] = ",".join(normalized)
     if tool == "patronize_great_person":
         values["yield_type"] = "YIELD_" + values.pop("currency").upper()
-    return Intent(tool, values, dry_run)
+    return Intent(tool, values, dry_run, execute)

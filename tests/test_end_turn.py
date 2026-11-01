@@ -302,7 +302,7 @@ def test_mid_turn_diplomacy_never_replays_or_makes_war_choice(clock):
     result = play(gs)
     assert "Turn paused" in result
     assert "player_id=2" in result
-    assert clock.now == 10
+    assert clock.now == 0
     assert gs._pending_end_turn
     assert not gs.conn.requests
     assert not any("AddResponse" in c or "CloseSession" in c for c in gs.conn.calls)
@@ -500,6 +500,32 @@ def test_diplomacy_appearing_after_first_probe_is_found_without_replay(clock):
     assert clock.now < 45
     assert gs._pending_end_turn
     assert len(gs.conn.requests) == 1
+
+
+@pytest.mark.parametrize("appears_at", [0, 1, 3, 9])
+def test_diplomacy_pause_returns_within_one_poll_without_extra_submission(clock, appears_at):
+    gs = FakeGameState()
+    gs.conn.advance = False
+    probes = []
+
+    def observe(conn):
+        probes.append(clock.now)
+        return ["DIPLOMACY|2"] if clock.now >= appears_at else ["DIPLOMACY_NONE"]
+
+    gs.conn.diplomacy_probe = observe
+    result = play(gs)
+    assert "diplomacy response required" in result
+    assert appears_at <= clock.now <= appears_at + 2
+    assert all(b - a >= 2 for a, b in zip(probes, probes[1:]))
+    assert gs.turn_pending and len(gs.conn.requests) == 1
+    assert not any("AddResponse" in code or "CloseSession" in code for code in gs.conn.calls)
+
+
+def test_immediate_advance_does_not_pay_for_diplomacy_probe(clock):
+    gs = FakeGameState()
+    assert "Turn 50 -> 51" in play(gs)
+    assert not any("DIPLOMACY_PROBE" in code for code in gs.conn.calls)
+    assert not clock.sleeps
 
 
 def test_message_processing_must_finish_after_turn_activation(clock):

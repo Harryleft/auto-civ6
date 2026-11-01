@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import secrets
+import shlex
 import socket
 import subprocess
 import sys
@@ -19,6 +20,8 @@ import time
 import uuid
 
 from civ_mcp.devtools.turn_timing import TurnTiming
+from civ_mcp.devtools.commands import GROUPS, HelpRequested, parse_command
+from civ_mcp.devtools.evidence import CommandError
 
 DONE = {"tool_result", "tool_outcome_unknown", "command_blocked", "dry_run",
         "help", "tools", "tool_schema", "pending", "verification", "session_closing"}
@@ -88,6 +91,14 @@ def receive_command(event, command):
     events = [first]
     completion = DONE if command.strip() != "verify state" else {
         "verification", "command_blocked", "session_closing"}
+    # Use the CLI grammar: a save name or quoted query containing --execute
+    # is not execution intent. Parsing here never submits or confirms a tool.
+    try:
+        words = shlex.split(command)
+        if words and words[0] in GROUPS and parse_command(command).execute:
+            completion = DONE - {"dry_run"}
+    except (ValueError, CommandError, HelpRequested):
+        pass  # Drain the CLI's authoritative error/help response as usual.
     while True:
         value = event()
         events.append(value)
@@ -117,6 +128,8 @@ def serve(args):
                str(args.evidence / "cli"), "debug"]
     if args.offline:
         command.append("--offline")
+    if getattr(args, "compact", False):
+        command.append("--compact")
     with (args.evidence / "stderr.log").open("w", encoding="utf-8") as errors:
         # Popen's encoding only configures our pipe wrappers. Pin the child's
         # redirected stdin too, overriding an inherited Windows cp936 setting.
@@ -230,6 +243,7 @@ if __name__ == "__main__":
     owner.add_argument("--socket", type=Path, required=True)
     owner.add_argument("--evidence", type=Path, required=True)
     owner.add_argument("--offline", action="store_true")
+    owner.add_argument("--compact", action="store_true", help="Compact CLI display while preserving raw response evidence")
     owner.add_argument("--tcp", action="store_true", help="Use authenticated loopback IPC (automatic without AF_UNIX)")
     caller = commands.add_parser("send")
     caller.add_argument("--socket", type=Path, required=True)

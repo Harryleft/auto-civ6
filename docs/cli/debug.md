@@ -19,6 +19,10 @@
 
 `state` 是对应公开 MCP 查询的别名，`state snapshot` 返回结构化当前玩家快照。`call TOOL JSON_OBJECT` 只调用工具列表中实际存在的入口；省略参数等同 `{}`。JSON 不能有重复键、NaN 或 Infinity。CLI 按实际发现的 `inputSchema` 及共享的静态动作参数组合，在发送前校验参数；MCP 仍执行服务端校验。动作确认与门禁仍由现有 Runtime 所有者处理；CLI 不调用内部 setter 或清理未决状态。使用实体 ID 和坐标前须先查询真实状态。
 
+变更命名命令还支持 `--execute`，与 `--dry-run` 互斥。例如，模型已根据当前事实决定移动后，可以输入 `unit move 42 22 9 --execute`：同一条命令先输出静态预演，通过后调用一次目标工具，省去两次 CLI 往返。该选项明确授权这一个动作；不选择策略、不串联其他动作、不重试。预演仍仅检查 schema 与静态参数，实际调用照常受离线、传输未知、身份、Runtime 未决请求及原生规则限制。预演事件不是完成事件，须读取随后 `tool_result`、`tool_outcome_unknown` 或 `command_blocked`；未知结果按原请求确认流程处理。
+
+`debug --compact` 只删除与单个文本内容完全相同的 `structuredContent.result`，保留其他结构化事实和错误；原始回包照常保存。前台 `scripts/civ6_cli_relay.py serve --compact` 可透传该选项；relay 只输送模型给出的单条命令并留存收据，不运行策略或后台观测。
+
 `pending` 调用 `get_runtime_status`：返回本服务的 UUID、PID、连接标记、动作摘要与动作／推进／外交／议会／保存／替换的未决事实。该工具只读取所有者内存，不查询游戏、确认请求、刷新缓存或清门禁。`connected=false` 不表示世界不存在，`has_pending=false` 不证明别的 MCP 进程没有未决请求。
 
 服务 UUID／PID 标识本次 MCP 生命周期，不是世界身份或测试轮次。每次显式工具调用前也读取同一内存快照核对服务身份，不自动确认任何请求。
