@@ -635,6 +635,58 @@ def test_popup_closure_confirms_original_request_without_another_submission(cloc
     assert not gs._pending_end_turn and len(gs.conn.requests) == 1
 
 
+@pytest.mark.parametrize("popup", ["ProjectBuiltPopup", "NaturalDisasterPopup"])
+def test_advanced_ready_turn_keeps_pending_until_native_popup_is_explicitly_closed(clock, popup):
+    gs = FakeGameState()
+    gs.conn.information_popups = [f"INFORMATION_POPUPS|VISIBLE|{popup}", "INFORMATION_POPUPS|DONE"]
+    result = play(gs)
+    assert popup in result and "dismiss_popup" in result
+    assert gs.conn.turn == 51 and gs.turn_pending
+    assert gs._pending_end_turn_from == 50 and len(gs.conn.requests) == 1
+    assert gs.diff_baselines == []
+    assert not any("pcall(Close)" in c or "SetHide" in c for c in gs.conn.calls)
+    gs.conn.information_popups = ["INFORMATION_POPUPS|DONE"]
+    assert "Turn 50 -> 51" in play(gs)
+    assert not gs.turn_pending and len(gs.conn.requests) == 1
+
+
+@pytest.mark.parametrize("visibility", [[], ["INFORMATION_POPUPS|UNKNOWN"]])
+def test_advanced_ready_turn_with_unknown_popup_visibility_cannot_confirm(clock, visibility):
+    gs = FakeGameState()
+    gs.conn.information_popups = visibility
+    result = play(gs)
+    assert "WAITING:" in result and gs.turn_pending
+    assert gs.diff_baselines == [] and len(gs.conn.requests) == 1
+    gs.conn.information_popups = ["INFORMATION_POPUPS|DONE"]
+    assert "Turn 50 -> 51" in play(gs)
+    assert len(gs.conn.requests) == 1
+
+
+def test_advanced_ready_turn_popup_probe_timeout_does_not_fall_through_to_confirmation(clock):
+    gs = FakeGameState()
+    original = gs.conn.execute_write
+
+    async def timeout_popup_query(lua):
+        if "INFORMATION_POPUPS" in lua:
+            clock.now += et.END_TURN_TIMEOUT_SECONDS + 1
+            raise TimeoutError("popup visibility timed out")
+        return await original(lua)
+
+    gs.conn.execute_write = timeout_popup_query
+    assert "WAITING:" in play(gs)
+    assert gs.turn_pending and len(gs.conn.requests) == 1
+    assert gs.diff_baselines == []
+
+
+def test_native_terminal_outcome_precedes_advanced_turn_popup_visibility(clock):
+    gs = FakeGameState()
+    gs.conn.information_popups = ["INFORMATION_POPUPS|VISIBLE|ProjectBuiltPopup", "INFORMATION_POPUPS|DONE"]
+    gs.conn.game_over_status = ["GAME_OVER|VICTORY|Sumeria|VICTORY_TECHNOLOGY|alive|Gilgamesh|0"]
+    result = play(gs)
+    assert "VICTORY" in result and not gs.turn_pending
+    assert not any("INFORMATION_POPUPS" in c for c in gs.conn.calls)
+
+
 @pytest.mark.parametrize("visibility", [[], ["INFORMATION_POPUPS|UNKNOWN"],
     ["INFORMATION_POPUPS|VISIBLE|UnrecognizedPopup", "INFORMATION_POPUPS|DONE"]])
 def test_unknown_popup_visibility_never_authorizes_advancement(clock, visibility):

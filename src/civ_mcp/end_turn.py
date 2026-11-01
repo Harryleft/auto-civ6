@@ -611,6 +611,7 @@ class TurnProgress:
         next_congress_probe = started
         turn_after = None
         ready = None
+        advance_confirmed = False
         reads_failed = False
         next_game_over_check = started
         try:
@@ -651,14 +652,13 @@ class TurnProgress:
                         return self._scope_error()
                     if turn_after is None:
                         reads_failed = True
-                    elif turn_after > turn_before and ready is True and status.world == self.world:
-                        break
                     elif turn_after < turn_before:
                         return (
                             self._outcome(f"End-turn result unknown: turn changed from {turn_before} "
                             f"to {turn_after}. Read game state or use explicit recovery; "
                             "the pending request was not resent.", status="unknown")
                         )
+                    advance_ready = turn_after is not None and turn_after > turn_before and ready is True and status.world == self.world
                     if (turn_after == turn_before and status.phase == "LOCAL_ACTION_REQUIRED"
                             and status.has_sent_turn_complete is False):
                         if confirming and self.attempt_token is not None:
@@ -681,7 +681,7 @@ class TurnProgress:
                         return (self._outcome("Turn paused — local action required while native turn completion remains unconfirmed. "
                                 + self.describe(status)
                                 + "\nThe existing request is preserved and was not resent. Inspect get_turn_status; use explicit recovery if completion cannot be confirmed.", status="pending"))
-                    if time.monotonic() >= next_congress_probe:
+                    if not advance_ready and time.monotonic() >= next_congress_probe:
                         next_congress_probe = time.monotonic() + CONGRESS_PROBE_SECONDS
                         try:
                             congress = await _check_congress_phase(gs, pending=True)
@@ -694,7 +694,7 @@ class TurnProgress:
                             reads_failed = True
                             self.read_failures += 1
                     diplomacy_checked = False
-                    if time.monotonic() >= next_diplomacy_probe:
+                    if not advance_ready and time.monotonic() >= next_diplomacy_probe:
                         diplomacy_checked = True
                         next_diplomacy_probe = time.monotonic() + DIPLOMACY_PROBE_SECONDS
                         try:
@@ -704,7 +704,7 @@ class TurnProgress:
                         except (OSError, TimeoutError, LuaError, ValueError):
                             reads_failed = True
                             self.read_failures += 1
-                    if time.monotonic() >= next_information_probe:
+                    if advance_ready or time.monotonic() >= next_information_probe:
                         next_information_probe = time.monotonic() + INFORMATION_PROBE_SECONDS
                         try:
                             popups = await visible_information_popups(gs.conn)
@@ -724,6 +724,14 @@ class TurnProgress:
                             if popups is None:
                                 reads_failed = True
                                 self.read_failures += 1
+                            elif advance_ready:
+                                # Project completion can leave active/complete
+                                # true and UI processing false while its native
+                                # popup still pauses next-turn entity updates.
+                                # Only this fresh, complete empty visibility
+                                # observation permits retiring the request.
+                                advance_confirmed = True
+                                break
                         except (OSError, TimeoutError, LuaError, ValueError):
                             reads_failed = True
                             self.read_failures += 1
@@ -734,7 +742,7 @@ class TurnProgress:
             pass  # Observation budget expiry is not an actual failed native read.
         if self._scope_invalid:
             return self._scope_error()
-        if turn_after is not None and turn_after > turn_before and ready is True and self.last_status is not None and self.last_status.world == self.world:
+        if advance_confirmed:
             return await self._report_advance(gs, turn_before, turn_after)
         detail = " Some game queries failed; the current turn cannot be reliably confirmed." if reads_failed else ""
         return (
