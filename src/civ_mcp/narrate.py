@@ -456,11 +456,11 @@ def narrate_pathing_estimate(est: lq.PathingEstimate) -> str:
             "No native path to the destination returned. It may be in fog, "
             "behind foreign borders, or blocked by impassable terrain."
         )
-    if est.turns == 0:
-        return f"Reachable this turn ({est.total_tiles} tiles in path, all within movement range)."
     wp_str = ""
-    if est.waypoints and len(est.waypoints) > 2:
-        wp_str = f"\n  Path: {est.waypoints[0]} -> ... -> {est.waypoints[-1]}"
+    if any(est.waypoints):
+        wp_str = "\n  Path: " + " -> ".join(est.waypoints)
+    if est.turns == 0:
+        return f"Reachable this turn ({est.total_tiles} tiles in path, all within movement range).{wp_str}"
     return (
         f"~{est.turns} turns (heuristic assuming current reachable tiles per turn; terrain and future costs may differ; {est.total_tiles} tiles total, "
         f"{est.reachable_this_turn} reachable this turn){wp_str}"

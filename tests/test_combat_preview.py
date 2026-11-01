@@ -219,6 +219,88 @@ end}end
     assert conn.previews==[] and conn.operations==[]
 
 
+def unit_stack(conn, order):
+    conn.lua.execute('''
+civilian={};for k,v in pairs(enemy)do civilian[k]=v end
+civilian.GetID=function()return 999 end
+civilian.GetType=function()return 3 end
+civilian.GetComponentID=function()return {player=2,id=999,type=0}end
+GameInfo.Units[3]={UnitType='UNIT_SETTLER',Combat=0}
+secondMilitary={};for k,v in pairs(enemy)do secondMilitary[k]=v end
+secondMilitary.GetID=function()return 1000 end
+secondMilitary.GetComponentID=function()return {player=2,id=1000,type=0}end
+stack={''' + order + '''}
+Map.GetUnitsAt=function()return {Units=function()
+ local i=0;return function()i=i+1;return stack[i]end
+end}end
+''')
+
+
+@pytest.mark.parametrize('order', ['enemy,civilian', 'civilian,enemy'])
+@pytest.mark.parametrize('mode', ['MELEE', 'RANGED'])
+def test_unique_military_target_with_civilian_is_bound_in_either_enumeration_order(order, mode):
+    conn=PreviewConn();unit_stack(conn, order)
+    if mode=='RANGED':conn.lua.execute('unitInfo.RangedCombat=40;allowed.range=true')
+    before=conn.facts();result,state=preview(conn)
+
+    assert result['status']=='estimated' and result['mode']==mode, result
+    assert result['target']['id']==5111813
+    assert result['target']['component']=={'player':2,'id':5111813,'type':0}
+    assert conn.previews==['Melee' if mode=='MELEE' else 'Ranged']
+    assert conn.facts()==before and conn.operations==[] and state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('order,change', [
+    ('civilian,secondMilitary', 'secondMilitary.GetType=function()return 3 end'),
+    ('enemy,secondMilitary,civilian', ''),
+    ('civilian,secondMilitary,enemy', ''),
+    ('civilian,enemy', 'GameInfo.Units[3]=nil'),
+    ('civilian,enemy', 'GameInfo.Units[3].Combat=nil'),
+    ('enemy,civilian', 'civilian.GetOwner=function()return 3 end'),
+    ('enemy,civilian', 'PlayersVisibility[0].IsUnitVisible=function(_,other)return other==enemy end'),
+])
+def test_unresolved_stack_never_selects_a_combat_target(order, change):
+    conn=PreviewConn();unit_stack(conn, order);conn.lua.execute(change)
+    before=conn.facts();result,state=preview(conn)
+
+    assert result['status']=='unknown' and result['estimate'] is None, result
+    assert conn.previews==[] and conn.operations==[] and conn.facts()==before
+    assert state.pending_action_summary is None
+
+
+@pytest.mark.parametrize('order,info_index,target_id', [
+    ('civilian', 3, 999),
+    ('enemy', 2, 5111813),
+])
+@pytest.mark.parametrize('classification_missing', [False, True])
+def test_single_target_preserves_native_preview_without_new_classification_gate(
+    order, info_index, target_id, classification_missing,
+):
+    conn=PreviewConn();unit_stack(conn, order)
+    if classification_missing:
+        conn.lua.execute(f'GameInfo.Units[{info_index}].Combat=nil')
+    before=conn.facts();result,state=preview(conn)
+
+    assert result['status']=='estimated' and result['target']['id']==target_id, result
+    assert conn.previews==['Melee'] and conn.operations==[] and conn.facts()==before
+    assert state.pending_action_summary is None
+
+
+def test_stack_becoming_ambiguous_during_simulation_discards_bound_estimate():
+    conn=PreviewConn();unit_stack(conn, 'civilian,enemy')
+    conn.lua.execute('''
+local simulate=CombatManager.SimulateAttackVersus
+CombatManager.SimulateAttackVersus=function(...)
+ local result=simulate(...);stack={enemy,secondMilitary,civilian};return result
+end
+''')
+    result,state=preview(conn)
+
+    assert result['status']=='unknown' and result['estimate'] is None, result
+    assert conn.previews==['Melee'] and conn.operations==[]
+    assert state.pending_action_summary is None
+
+
 @pytest.mark.parametrize('pending_kind',['action','turn','diplomacy','congress','save','replacement','popup'])
 def test_every_pending_owner_blocks_preview_before_any_native_io_or_cleanup(pending_kind):
     from civ_mcp.actions import _PendingAction

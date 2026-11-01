@@ -51,25 +51,47 @@ end
 local function previewSame(actual,expected)
  for i=1,#expected do assert(actual[i]==expected[i],"actor or target changed during preview") end
 end
+local function previewFindUnitTarget()
+ local units=Map.GetUnitsAt({x},{y})
+ assert(units,"hostile target unavailable")
+ local candidates={{}}
+ for other in units:Units() do
+  local visible=PlayersVisibility[{owner}]:IsUnitVisible(other)
+  assert(type(visible)=="boolean","unit visibility unavailable")
+  assert(visible,"hidden unit target is not supported")
+  local otherOwner=other:GetOwner()
+  assert(scopePlayer(otherOwner),"unit owner unavailable")
+  if otherOwner~={owner} then
+   candidates[#candidates+1]=other
+  end
+ end
+ assert(#candidates>0,"hostile target unavailable")
+ -- Preserve the original single-target path, including civilian targets and
+ -- unavailable Combat classification; the native simulation remains decisive.
+ if #candidates==1 then return candidates[1] end
+ local target,stackOwner
+ for _,other in ipairs(candidates) do
+  local otherOwner=other:GetOwner()
+  assert(not stackOwner or stackOwner==otherOwner,"ambiguous unit target")
+  stackOwner=otherOwner
+  -- Resolve only mixed stacks, using the action preview's current GameInfo
+  -- military classification without guessing missing rows or military priority.
+  local info=GameInfo.Units[other:GetType()]
+  assert(info and previewFinite(info.Combat) and info.Combat>=0,"unit combat classification unavailable")
+  if info.Combat>0 then
+   assert(not target,"ambiguous unit target")
+   target=other
+  end
+ end
+ assert(target,"hostile military target unavailable")
+ return target
+end
 local function previewFindTarget()
  -- A visible city owns its combat target; garrison/civilian stacks do not
  -- compete with the city-center component used by SimulateAttackInto.
  local city=CityManager.GetCityAt({x},{y})
  if city then return nil,city end
- local units=Map.GetUnitsAt({x},{y})
- assert(units,"hostile target unavailable")
- local target
- for other in units:Units() do
-  local visible=PlayersVisibility[{owner}]:IsUnitVisible(other)
-  assert(type(visible)=="boolean","unit visibility unavailable")
-  assert(visible,"hidden unit target is not supported")
-  if other:GetOwner()~={owner} then
-   assert(not target,"ambiguous unit target")
-   target=other
-  end
- end
- assert(target,"hostile target unavailable")
- return target,nil
+ return previewFindUnitTarget(),nil
 end
 local function previewRefusal(code,reason)
  return "COMBAT_PREVIEW_INELIGIBLE|"..{json.dumps(token)}.."|"..code.."|"..(reason or "")
@@ -116,18 +138,7 @@ local function previewFinish(mode)
   previewSame(previewCityFacts(target),previewTargetFacts)
  else
   assert(CityManager.GetCityAt({x},{y})==nil,"target plot became a city")
-  local units=Map.GetUnitsAt({x},{y})
-  assert(units,"original target unavailable")
-  for other in units:Units() do
-   local visible=PlayersVisibility[{owner}]:IsUnitVisible(other)
-   assert(type(visible)=="boolean","unit visibility unavailable")
-   assert(visible,"hidden unit target is not supported")
-   if other:GetOwner()~={owner} then
-    assert(not target,"ambiguous unit target")
-    target=other
-   end
-  end
-  assert(target,"original target unavailable")
+  target=previewFindUnitTarget()
   previewSame(previewUnitFacts(target),previewTargetFacts)
  end
  local targetOwner=previewTargetFacts[1]
