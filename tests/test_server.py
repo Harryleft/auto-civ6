@@ -1626,8 +1626,14 @@ class TestMcpProtocol:
                     assert initialization.serverInfo.name == "Civilization VI"
                     tools = (await session.list_tools()).tools
                     names = {tool.name for tool in tools}
-                    assert len(names) == 96
+                    assert len(names) == 98
                     assert {"search_research", "get_public_report", "get_unit_formations", "set_unit_formation", "get_combat_preview"} <= names
+                    assert {"get_artifact_choices", "choose_artifact"} <= names
+                    artifact_choices = next(tool for tool in tools if tool.name == "get_artifact_choices")
+                    assert artifact_choices.annotations.readOnlyHint is True
+                    artifact_choice = next(tool for tool in tools if tool.name == "choose_artifact")
+                    assert not artifact_choice.annotations.readOnlyHint
+                    assert artifact_choice.inputSchema["required"] == ["unit_id", "artifact_index", "player_id"]
                     preview = next(tool for tool in tools if tool.name == "get_combat_preview")
                     assert preview.annotations.readOnlyHint is True
                     assert preview.inputSchema["required"] == ["unit_id", "target_x", "target_y"]
